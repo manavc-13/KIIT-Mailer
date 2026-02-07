@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KIIT Mailer - Welcome</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --card-bg: #161616;
+            --text: #ffffff;
+            --accent: #3b82f6;
+            --text-muted: #a1a1aa;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.8rem;
+            background: linear-gradient(90deg, #fff, #aaa);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .step-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            counter-reset: step-counter;
+        }
+
+        .step-item {
+            display: flex;
+            margin-bottom: 1.5rem;
+        }
+
+        .step-num {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #333;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 1rem;
+            counter-increment: step-counter;
+        }
+
+        .step-num::before {
+            content: counter(step-counter);
+        }
+
+        .step-content h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+            color: #fff;
+        }
+
+        .step-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .cta-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            margin-top: 2rem;
+            transition: opacity 0.2s;
+        }
+
+        .cta-btn:hover {
+            opacity: 0.9;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            font-size: 0.8rem;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Welcome to KIIT Mailer</h1>
+
+        <div class="step-list">
+            <div class="step-item">
+                <div class="step-num"></div>
+                <div class="step-content">
+                    <h3>Generate App Password</h3>
+                    <p>
+                        To send emails securely, you need a Google App Password.<br>
+                        Go to <a href="https://myaccount.google.com/u/1/apppasswords" target="_blank">Google Account Settings</a> (ensure you are logged in with your KIIT email).
+                    </p>
+                </div>
+            </div>
+
+            <div class="step-item">
+                <div class="step-num"></div>
+                <div class="step-content">
+                    <h3>Create New App Password</h3>
+                    <p>
+                        In the "App names" field, type "KIIT Mailer" and click <strong>Create</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="step-item">
+                <div class="step-num"></div>
+                <div class="step-content">
+                    <h3>Copy & Save</h3>
+                    <p>
+                        Copy the 16-character password generated. You will need to enter this in the <strong>Settings</strong> tab on the next screen.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <a href="dashboard.html" class="cta-btn">I have my App Password &rarr;</a>
+
+        <div class="footer">
+            &copy; 2026 Made by Manav Choudhary
+        </div>
+    </div>
+
+</body>
+
+</html>

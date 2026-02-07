@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KIIT Mailer - Dashboard</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Lato:wght@400;700&family=Merriweather:wght@400;700&family=Montserrat:wght@400;700&family=Oswald:wght@400;700&family=Roboto:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <style>
+        .brand-text {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.5px;
+        }
+
+        .text-accent {
+            color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <!-- <img src="images/logo.png" alt="Logo" style="width: 40px; height: auto;"> -->
+                <span class="icon" style="font-size: 1.5rem;">📨</span>
+                <span class="brand-text">KIIT <span class="text-accent">Mailer</span></span>
+            </div>
+
+            <nav>
+                <button class="nav-btn active" data-tab="compose">
+                    <span class="icon">✉️</span> Bulk Mail
+                </button>
+                <!-- <button class="nav-btn" data-tab="sent">
+                    <span class="icon">📤</span> Sent
+                </button> -->
+                <!-- <button class="nav-btn" data-tab="drafts">
+                    <span class="icon">📝</span> Drafts
+                </button> -->
+                <button class="nav-btn" data-tab="settings" id="settingsTabBtn">
+                    <span class="icon">⚙️</span> Settings
+                </button>
+                <button class="nav-btn" data-tab="logs">
+                    <span class="icon">📜</span> System Activity
+                </button>
+            </nav>
+
+            <div class="user-profile">
+                <!-- User info can be dynamic or static since we removed login/staff ID -->
+                <div class="avatar" id="userAvatar">U</div>
+                <div class="user-info">
+                    <span class="name" id="userNameDisplay">User</span>
+                    <a href="index.html" class="logout">Back into Instructions</a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-layout">
+            <div class="content-area">
+
+                <!-- COMPOSE TAB -->
+                <div id="compose" class="tab-content active">
+                    <header class="tab-header">
+                        <h2>Bulk Compose</h2>
+                        <div class="header-actions">
+                            <!-- <button id="saveDraftBtn" class="secondary-btn">💾 Save Draft</button> -->
+                        </div>
+                    </header>
+
+                    <div class="form-container">
+
+                        <div class="info-box"
+                            style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1rem; border-radius: 8px; color: #bfdbfe; font-size: 0.9rem;">
+                            ℹ️ Make sure your CSV has at least a <strong>Name</strong> and <strong>Email</strong>
+                            column.
+                        </div>
+
+                        <!-- Bulk Mode Input Only -->
+                        <div class="input-group" id="csv-group">
+                            <label>Recipients CSV</label>
+                            <div class="file-drop-area" id="csvDrop">
+                                <span class="file-msg">Drag & Drop CSV or Click to Upload</span>
+                                <input type="file" id="csvFile" accept=".csv">
+                            </div>
+                            <div class="csv-actions">
+                                <span id="csvStatus" class="status-text">No file selected</span>
+                                <button id="downloadTemplateBtn" class="text-btn">Download Template</button>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Subject</label>
+                            <input type="text" id="subject" placeholder="Enter subject line">
+                        </div>
+
+                        <div class="input-group">
+                            <label>Message Body</label>
+
+                            <div class="editor-controls">
+                                <div class="mode-toggle">
+                                    <label class="switch-label">
+                                        <input type="radio" name="editorMode" value="rich">
+                                        <span class="mode-btn">Rich Text</span>
+                                    </label>
+                                    <label class="switch-label">
+                                        <input type="radio" name="editorMode" value="html" checked>
+                                        <span class="mode-btn">Raw HTML</span>
+                                    </label>
+                                </div>
+                                <button id="previewBtn" class="secondary-btn">👁️ Preview</button>
+                            </div>
+
+                            <div class="rich-editor-container" id="richEditorParams" style="display:none;">
+                                <div id="editor-container"></div>
+                            </div>
+
+                            <div class="html-editor-container" id="htmlEditorParams">
+                                <textarea id="htmlEditor" placeholder="Paste your HTML here..."></textarea>
+                            </div>
+
+                            <div class="placeholder-toolbar" id="placeholderToolbar"></div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Attachments</label>
+                            <div class="attachment-area">
+                                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                                    <label for="attachments" class="secondary-btn"
+                                        style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                        <span>📎</span> Attach Files
+                                    </label>
+                                    <button id="clearAttachmentsBtn" class="secondary-btn" style="display: none;">×
+                                        Clear All</button>
+                                    <input type="file" id="attachments" multiple style="display: none;">
+                                </div>
+                                <div id="attachmentList" class="file-list"></div>
+                            </div>
+                        </div>
+
+                        <div class="action-bar">
+                            <button id="sendBtn" class="primary-btn">Send Bulk Emails</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SENT MAILS TAB -->
+                <!-- SENT MAILS TAB REMOVED -->
+
+                <!-- LOGS TAB -->
+                <div id="logs" class="tab-content">
+                    <header class="tab-header">
+                        <h2>System Activity</h2>
+                        <button class="clear-btn" id="clearLogs">Clear Local View</button>
+                    </header>
+                    <div class="log-terminal" id="logTerminal">
+                        <div class="log-line system">System ready.</div>
+                    </div>
+                </div>
+
+                <!-- SETTINGS TAB -->
+                <div id="settings" class="tab-content">
+                    <header class="tab-header">
+                        <h2>Settings</h2>
+                    </header>
+                    <div class="form-container" style="max-width: 500px;">
+
+                        <div class="input-group">
+                            <label>KIIT Email Address <span style="color:red">*</span></label>
+                            <input type="email" id="settingsEmail" placeholder="roll_number@kiit.ac.in">
+                        </div>
+
+                        <div class="input-group">
+                            <label>App Password <span style="color:red">*</span></label>
+                            <input type="password" id="settingsPass" placeholder="16-character app password">
+                            <small style="color: #666; display: block; margin-top: 4px;">Paste the 16-character password
+                                generated from Google Account.</small>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Display Name (Optional)</label>
+                            <input type="text" id="settingsDisplayName" placeholder="e.g. First Last">
+                        </div>
+
+                        <div class="input-group">
+                            <label>Reply-To Email</label>
+                            <input type="email" id="settingsReplyTo" placeholder="info@edgei.org">
+                        </div>
+
+                        <button id="saveSettingsBtn" class="primary-btn">Save Settings</button>
+
+                        <p style="color: #666; font-size: 0.85rem; margin-top: 1rem;">
+                            🔒 Your credentials are saved locally in your browser and sent directly to the server only
+                            when sending emails. They are not stored permanently on any external server.
+                        </p>
+                    </div>
+                </div>
+                <footer class="app-footer">
+                    &copy; <span id="year"></span> Made by Manav Choudhary.
+                </footer>
+            </div> <!-- End content-area -->
+        </main>
+    </div>
+
+    <!-- Mode Switch Warning Modal -->
+    <div id="modeWarningModal" class="overlay hidden">
+        <div class="progress-card" style="text-align: left; width: 450px;">
+            <h3 style="margin-top:0; color: var(--warning);">⚠️ Warning: Potential Data Loss</h3>
+            <p style="color: #ccc; font-size: 0.95rem; line-height: 1.5;">
+                Switching editor modes may cause formatting loss or reset your content.
+                <br><br>
+                <strong>If you switch, the current content in the active editor will be cleared or overwritten.</strong>
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
+                <button id="cancelModeSwitch" class="secondary-btn">Cancel</button>
+                <button id="confirmModeSwitch" class="primary-btn"
+                    style="background: var(--warning); border-color: var(--warning);">Yes, Switch & Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="overlay hidden">
+        <div class="preview-card"
+            style="width: 800px; max-width: 95vw; background: white; color: black; text-align: left; padding: 0; overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+            <div class="preview-header"
+                style="padding: 1rem; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f9f9f9;">
+                <h3 style="margin:0; font-size: 1.1rem; color: #333;">Email Preview</h3>
+                <button id="closePreviewBtn"
+                    style="background:none; border:none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div class="preview-body" id="previewFrameContainer" style="flex: 1; overflow: auto; padding: 0;">
+                <iframe id="previewFrame" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Overlay -->
+    <div id="progressOverlay" class="overlay hidden">
+        <div class="progress-card">
+            <h3>Sending Emails...</h3>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-stat">
+                <span id="progressText">0 / 0</span>
+                <span id="progressPercent">0%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="js/app.js"></script>
+    <!-- <script src="js/sent-mails.js"></script> -->
+    <!-- <script src="js/logs.js"></script> -->
+</body>
+
+</html>
