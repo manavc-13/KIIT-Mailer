@@ -936,28 +936,43 @@ async function sendOne(to, subject, html, index, total) {
     const formData = new FormData();
     formData.append('to', to);
     formData.append('subject', subject);
-    formData.append('html', html);
+    formData.append('html', html); // This is the processed HTML with replacements
 
     // Inject Credentials
-    formData.append('smtpUser', state.credentials.email);
-    formData.append('smtpPass', state.credentials.pass);
-    if (state.credentials.displayName) formData.append('displayName', state.credentials.displayName);
+    if (state.credentials) {
+        formData.append('smtpUser', state.credentials.email);
+        formData.append('smtpPass', state.credentials.pass);
+        if (state.credentials.displayName) formData.append('displayName', state.credentials.displayName);
+        if (state.credentials.replyTo) formData.append('replyTo', state.credentials.replyTo);
+    }
 
     state.attachments.forEach(file => formData.append('file', file));
 
     try {
         const res = await fetch('/api/send-mail', { method: 'POST', body: formData });
-        const data = await res.json();
+
+        // Read text first to handle non-JSON errors gracefully
+        const rawText = await res.text();
+
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch (e) {
+            // JSON Parse failed, likely an HTML error page from Vercel
+            console.error('Server returned non-JSON:', rawText);
+            throw new Error(`Server Error (Raw): ${rawText.substring(0, 100)}...`);
+        }
 
         if (res.ok && data.success) {
             log('success', `Sent to ${to}`);
             return true;
         } else {
-            log('error', `Failed to send to ${to}: ${data.error}`);
+            const errMsg = data.error || data.message || 'Unknown Server Error';
+            log('error', `Failed to send to ${to}: ${errMsg}`);
             return false;
         }
     } catch (err) {
-        log('error', `Network Error (${to}): ${err.message}`);
+        log('error', `Error (${to}): ${err.message}`);
         return false;
     }
 }
