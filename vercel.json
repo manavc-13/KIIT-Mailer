@@ -1,5 +1,15 @@
 {
+    "functions": {
+        "api/send-mail.js": {
+            "maxDuration": 60,
+            "memory": 1024
+        }
+    },
     "rewrites": [
+        {
+            "source": "/api/send-mail",
+            "destination": "/api/send-mail.js"
+        },
         {
             "source": "/api/(.*)",
             "destination": "/api/$1"
@@ -7,10 +17,6 @@
         {
             "source": "/",
             "destination": "/public/index.html"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "/public/$1"
         }
     ]
 }

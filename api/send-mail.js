@@ -3,6 +3,15 @@ const Busboy = require('busboy');
 const logger = require('../lib/logger');
 // const db = require('../lib/storage');
 
+// Vercel config to disable default body parsing for this route
+// This allows busboy to consume the stream directly.
+module.exports.config = {
+    api: {
+        bodyParser: false,
+        responseLimit: false,
+    },
+};
+
 module.exports = async (req, res) => {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
