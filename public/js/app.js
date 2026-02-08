@@ -405,7 +405,7 @@ function initQuill() {
                 line-height:1.6;
             ">
                 <strong>Topics of Interest:</strong><br>
-                Topic of Interest: Submissions of high-quality papers are expected in areas of research and application in Edge AI hardware, federated and collaborative learning at the edge, low-latency and energy-efficient edge intelligence, privacy-preserving edge analytics and real-world applications such as smart cities, autonomous systems, and industrial IoT.</strong>.
+                Submissions of high-quality papers are expected in areas of research and application in Edge AI hardware, federated and collaborative learning at the edge, low-latency and energy-efficient edge intelligence, privacy-preserving edge analytics and real-world applications such as smart cities, autonomous systems, and industrial IoT.
             </p>
         </td>
     </tr>
