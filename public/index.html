@@ -136,14 +136,19 @@
     <div class="container">
         <h1>Welcome to KIIT Mailer</h1>
 
+        <p style="color: var(--text-muted); text-align:center; margin: -0.5rem 0 1.75rem 0; font-size: 0.95rem; line-height:1.5;">
+            A general-purpose mailing utility for KIIT University — compose HTML emails,
+            send single or in bulk (CSV or manual entry), and preview exactly how recipients will see them.
+        </p>
+
         <div class="step-list">
             <div class="step-item">
                 <div class="step-num"></div>
                 <div class="step-content">
-                    <h3>Generate App Password</h3>
+                    <h3>Generate Google App Password</h3>
                     <p>
-                        To send emails securely, you need a Google App Password.<br>
-                        Go to <a href="https://myaccount.google.com/u/1/apppasswords" target="_blank">Google Account Settings</a> (ensure you are logged in with your KIIT email).
+                        Sign in with your <strong>@kiit.ac.in</strong> account and visit
+                        <a href="https://myaccount.google.com/u/1/apppasswords" target="_blank">Google App Passwords</a>.
                     </p>
                 </div>
             </div>
@@ -153,7 +158,7 @@
                 <div class="step-content">
                     <h3>Create New App Password</h3>
                     <p>
-                        In the "App names" field, type "KIIT Mailer" and click <strong>Create</strong>.
+                        In the "App name" field, type <strong>KIIT Mailer</strong> and click <strong>Create</strong>.
                     </p>
                 </div>
             </div>
@@ -161,20 +166,22 @@
             <div class="step-item">
                 <div class="step-num"></div>
                 <div class="step-content">
-                    <h3>Copy & Save</h3>
+                    <h3>Save in Settings</h3>
                     <p>
-                        Copy the 16-character password generated. You will need to enter this in the <strong>Settings</strong> tab on the next screen.
+                        Copy the 16-character password and paste it into the <strong>Settings</strong>
+                        tab on the next screen. Credentials stay in your browser only.
                     </p>
                 </div>
             </div>
         </div>
 
-        <a href="dashboard.html" class="cta-btn">I have my App Password &rarr;</a>
+        <a href="dashboard.html" class="cta-btn">Open Dashboard &rarr;</a>
 
         <div class="footer">
-            &copy; 2026 Made by Manav Choudhary
+            &copy; <span id="year"></span> KIIT Mailer
         </div>
     </div>
+    <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 
 </body>
 

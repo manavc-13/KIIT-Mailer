@@ -1,148 +1,266 @@
+// KIIT Mailer - Frontend Logic
+// HTML-first email composer with Single & Bulk (CSV / Manual Grid) modes,
+// Gmail-style preview with theme + viewport toggles.
 
-// Global UI State
 const MAX_SIZE_MB = 25;
+const STORAGE_SETTINGS = 'kiit_mailer_settings';
+const STORAGE_LOGS = 'kiit_mailer_logs';
 
-// DOM Elements
+// ---------- Default Starter HTML (generic, KIIT-friendly, light+dark safe) ----------
+const DEFAULT_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>KIIT Mailer</title>
+<style>
+  body { margin:0; padding:0; -webkit-text-size-adjust:100%; }
+  @media (prefers-color-scheme: dark) {
+    .body-bg { background-color:#0f1115 !important; }
+    .card { background-color:#1a1d24 !important; color:#e6e8eb !important; }
+    .muted { color:#a8adb6 !important; }
+    .accent { color:#7dabf8 !important; }
+    .divider { border-top-color:#2a2e36 !important; }
+    .btn { background-color:#2563eb !important; color:#ffffff !important; }
+  }
+  @media only screen and (max-width:600px) {
+    .card { width:100% !important; padding:24px !important; border-radius:0 !important; }
+    .btn { width:100% !important; box-sizing:border-box !important; }
+  }
+</style>
+</head>
+<body class="body-bg" style="margin:0; padding:0; background-color:#f4f5f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="body-bg" style="background-color:#f4f5f7;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" class="card" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:12px; overflow:hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1f2328;">
+          <tr>
+            <td style="padding:32px 36px 8px 36px;">
+              <h1 class="accent" style="margin:0 0 6px 0; font-size:22px; font-weight:700; color:#0b5394; letter-spacing:-0.2px;">
+                KIIT University
+              </h1>
+              <p class="muted" style="margin:0; font-size:14px; color:#6b7280;">
+                Bhubaneswar, Odisha &middot; kiit.ac.in
+              </p>
+            </td>
+          </tr>
+          <tr><td style="padding:16px 36px 0 36px;"><hr class="divider" style="border:none; border-top:1px solid #e5e7eb; margin:0;"></td></tr>
+          <tr>
+            <td style="padding:24px 36px;">
+              <p style="margin:0 0 14px 0; font-size:16px; line-height:1.6;">Dear {Name},</p>
+              <p style="margin:0 0 14px 0; font-size:16px; line-height:1.6;">
+                Replace this with your message. You can use placeholders such as
+                <strong>{Name}</strong> and <strong>{Email}</strong> — they will be
+                substituted per recipient when sending.
+              </p>
+              <p style="margin:0 0 24px 0; font-size:16px; line-height:1.6;">
+                Best regards,<br>
+                <strong>KIIT University</strong>
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td bgcolor="#0b5394" class="btn" style="border-radius:6px;">
+                    <a href="https://kiit.ac.in" target="_blank" style="display:inline-block; padding:12px 22px; font-size:14px; font-weight:600; color:#ffffff; text-decoration:none;">Visit KIIT</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td class="muted" style="padding:16px 36px 28px 36px; font-size:12px; color:#6b7280; border-top:1px solid #e5e7eb;">
+              You are receiving this email from KIIT Mailer.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+const DEFAULT_TEXT = `Dear {Name},
+
+Replace this with your plain-text message. Placeholders like {Name} and {Email} will be substituted per recipient.
+
+Best regards,
+KIIT University`;
+
+// ---------- DOM Elements ----------
 const els = {
     tabs: document.querySelectorAll('.nav-btn'),
     contents: document.querySelectorAll('.tab-content'),
-    csvGroup: document.getElementById('csv-group'),
+
+    // Send Mode
+    sendModeSeg: document.getElementById('sendModeSeg'),
+    singleFields: document.getElementById('singleFields'),
+    bulkFields: document.getElementById('bulkFields'),
+    singleEmail: document.getElementById('singleEmail'),
+    singleName: document.getElementById('singleName'),
+    singleCustomFields: document.getElementById('singleCustomFields'),
+    addSingleFieldBtn: document.getElementById('addSingleFieldBtn'),
+
+    // Bulk Source
+    bulkSourceSeg: document.getElementById('bulkSourceSeg'),
+    bulkCsv: document.getElementById('bulkCsv'),
+    bulkManual: document.getElementById('bulkManual'),
+
+    // CSV
     csvFile: document.getElementById('csvFile'),
     csvStatus: document.getElementById('csvStatus'),
+    downloadTmplBtn: document.getElementById('downloadTemplateBtn'),
+
+    // Manual grid
+    manualGrid: document.getElementById('manualGrid'),
+    addRowBtn: document.getElementById('addRowBtn'),
+    addColBtn: document.getElementById('addColBtn'),
+    clearGridBtn: document.getElementById('clearGridBtn'),
+    gridStatus: document.getElementById('gridStatus'),
+
+    // Common
+    subject: document.getElementById('subject'),
     placeholderToolbar: document.getElementById('placeholderToolbar'),
     attachInput: document.getElementById('attachments'),
     attachList: document.getElementById('attachmentList'),
-    downloadTmplBtn: document.getElementById('downloadTemplateBtn'),
+    clearAttachmentsBtn: document.getElementById('clearAttachmentsBtn'),
     sendBtn: document.getElementById('sendBtn'),
-    // Logs
-    logTerminal: document.getElementById('logTerminal'),
-    clearLogsBtn: document.getElementById('clearLogs'),
+
+    // Editor
+    editorSeg: document.getElementById('editorSeg'),
+    htmlEditor: document.getElementById('htmlEditor'),
+    textEditor: document.getElementById('textEditor'),
+    richEditorContainer: document.getElementById('richEditorParams'),
+    htmlEditorContainer: document.getElementById('htmlEditorParams'),
+    textEditorContainer: document.getElementById('textEditorParams'),
+
+    // Preview
+    previewBtn: document.getElementById('previewBtn'),
+    previewModal: document.getElementById('previewModal'),
+    closePreviewBtn: document.getElementById('closePreviewBtn'),
+    previewFrame: document.getElementById('previewFrame'),
+    previewStage: document.getElementById('previewStage'),
+    previewThemeSeg: document.getElementById('previewThemeSeg'),
+    previewViewportSeg: document.getElementById('previewViewportSeg'),
+    previewRecipient: document.getElementById('previewRecipient'),
+    gmailFrame: document.getElementById('gmailFrame'),
+    gmSubject: document.getElementById('gmSubject'),
+    gmFromName: document.getElementById('gmFromName'),
+    gmFromEmail: document.getElementById('gmFromEmail'),
+    gmTo: document.getElementById('gmTo'),
+    gmAvatar: document.getElementById('gmAvatar'),
+    gmDate: document.getElementById('gmDate'),
+    // Warnings
+    modeWarningModal: document.getElementById('modeWarningModal'),
+    confirmModeSwitch: document.getElementById('confirmModeSwitch'),
+    cancelModeSwitch: document.getElementById('cancelModeSwitch'),
+
     // Progress
     overlay: document.getElementById('progressOverlay'),
     progressBar: document.getElementById('progressBar'),
     progressText: document.getElementById('progressText'),
     progressPercent: document.getElementById('progressPercent'),
-    subject: document.getElementById('subject'),
-    logoutBtn: document.querySelector('.logout'),
 
+    // Logs
+    logTerminal: document.getElementById('logTerminal'),
+    clearLogsBtn: document.getElementById('clearLogs'),
+
+    // Toasts
+    toastContainer: document.getElementById('toastContainer'),
+
+    // User
     userNameDisplay: document.getElementById('userNameDisplay'),
     userAvatar: document.getElementById('userAvatar'),
-    toastContainer: document.getElementById('toastContainer'),
-    // Settings Elements
+
+    // Settings
     settingsEmail: document.getElementById('settingsEmail'),
     settingsPass: document.getElementById('settingsPass'),
     settingsDisplayName: document.getElementById('settingsDisplayName'),
     settingsReplyTo: document.getElementById('settingsReplyTo'),
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
     settingsTabBtn: document.getElementById('settingsTabBtn'),
-    // Editor Elements
-    htmlEditor: document.getElementById('htmlEditor'),
-    richEditorContainer: document.getElementById('richEditorParams'),
-    htmlEditorContainer: document.getElementById('htmlEditorParams'),
-    editorToggles: document.getElementsByName('editorMode'),
-    previewBtn: document.getElementById('previewBtn'),
-    previewModal: document.getElementById('previewModal'),
-    closePreviewBtn: document.getElementById('closePreviewBtn'),
-    previewFrame: document.getElementById('previewFrame'),
-    // Warnings
-    modeWarningModal: document.getElementById('modeWarningModal'),
-    confirmModeSwitch: document.getElementById('confirmModeSwitch'),
-    cancelModeSwitch: document.getElementById('cancelModeSwitch'),
-    // Attachments
-    clearAttachmentsBtn: document.getElementById('clearAttachmentsBtn')
 };
 
-// State
-let state = {
-    mode: 'bulk', // Forced bulk
-    editorMode: 'html', // 'html' or 'rich'
-    pendingEditorMode: null, // For warning
-    attachments: [],
+// ---------- State ----------
+const state = {
+    sendMode: 'single',     // 'single' | 'bulk'
+    bulkSource: 'csv',      // 'csv' | 'manual'
+    editorMode: 'html',     // 'html' | 'rich' | 'text'
+    pendingEditorMode: null,
+
+    // Single recipient extra fields (array of {key, value})
+    singleExtras: [],
+
+    // Manual grid: columns + rows
+    manualColumns: ['Name', 'Email'],
+    manualRows: [{ Name: '', Email: '' }],
+
+    // CSV
     csvData: null,
     csvHeaders: [],
+
+    // Attachments
+    attachments: [],
+
+    // Misc
     isSending: false,
     quill: null,
     credentials: null,
-    fontLink: '',
-    styleBlock: ''
+
+    // Preview
+    previewTheme: 'light',
+    previewViewport: 'desktop',
+    previewRowIndex: 0,
 };
 
-// --- Initialization ---
+// ---------- Init ----------
 document.addEventListener('DOMContentLoaded', () => {
-    // 0. Set Copyright Year
     document.getElementById('year').textContent = new Date().getFullYear();
 
-    // 1. Load Settings
     loadSettings();
-
-    // 2. Setup Quill
     initQuill();
 
-    // 3. Setup Listeners
     setupTabs();
+    setupSendModeToggle();
+    setupBulkSourceToggle();
+    setupSingleExtras();
     setupCSV();
+    setupManualGrid();
+    setupEditorMode();
     setupAttachments();
     setupSending();
     setupLogs();
     setupSettings();
-    setupSettings(); // Duplicate? Keeping one
-    setupEditorMode(); // New Listener setup
+    setupPreview();
 
-    loadDefaultAttachment(); // Load default attachment
-    loadHistory(); // Restore logs
+    renderManualGrid();
+    refreshPlaceholders();
+    loadHistory();
 
-    // Check if settings are missing, if so, switch to settings tab
     if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
         showToast('Please configure settings first', 'warning');
-        setTimeout(() => els.settingsTabBtn.click(), 500);
+        setTimeout(() => els.settingsTabBtn.click(), 400);
     }
 });
 
-// --- Settings ---
+// ---------- Settings ----------
 function loadSettings() {
-    const stored = localStorage.getItem('kiit_mailer_settings');
-    if (stored) {
-        try {
-            state.credentials = JSON.parse(stored);
-            // Fill UI
-            els.settingsEmail.value = state.credentials.email || '';
-            els.settingsPass.value = state.credentials.pass || '';
-            els.settingsDisplayName.value = state.credentials.displayName || '';
-
-            // Ensure Reply-To has a value, fallback to default if missing in saved data
-            els.settingsReplyTo.value = state.credentials.replyTo || 'info@edgei.org';
-            els.settingsDisplayName.value = state.credentials.displayName || 'EDGEI 2026';
-
-            // Update Profile UI
-            if (state.credentials.email) {
-                els.userNameDisplay.textContent = state.credentials.displayName || state.credentials.email.split('@')[0];
-                els.userAvatar.textContent = (state.credentials.displayName || state.credentials.email).charAt(0).toUpperCase();
-            }
-        } catch (e) {
-            console.error("Failed to parse settings", e);
+    const stored = localStorage.getItem(STORAGE_SETTINGS);
+    if (!stored) return;
+    try {
+        state.credentials = JSON.parse(stored);
+        els.settingsEmail.value = state.credentials.email || '';
+        els.settingsPass.value = state.credentials.pass || '';
+        els.settingsDisplayName.value = state.credentials.displayName || '';
+        els.settingsReplyTo.value = state.credentials.replyTo || '';
+        if (state.credentials.email) {
+            const dn = state.credentials.displayName || state.credentials.email.split('@')[0];
+            els.userNameDisplay.textContent = dn;
+            els.userAvatar.textContent = dn.charAt(0).toUpperCase();
         }
-    } else {
-        // No stored settings, set default reply-to
-        // Note: we don't save it yet until user clicks save, but we show it in UI
-        els.settingsReplyTo.value = 'info@edgei.org';
-        els.settingsDisplayName.value = 'EDGEI 2026';
+    } catch (e) {
+        console.error('Failed to parse settings', e);
     }
-}
-
-// --- Default Attachment ---
-function loadDefaultAttachment() {
-    fetch('images/Edgei.jpeg')
-        .then(response => {
-            if (!response.ok) throw new Error("Image not found");
-            return response.blob();
-        })
-        .then(blob => {
-            const file = new File([blob], 'Edgei.jpeg', { type: 'image/jpeg' });
-            state.attachments.push(file);
-            renderAttachments();
-            showToast('Default attachment loaded', 'success');
-        })
-        .catch(err => console.log('Default attachment not found or skipped:', err));
 }
 
 function setupSettings() {
@@ -150,554 +268,30 @@ function setupSettings() {
         const email = els.settingsEmail.value.trim();
         const pass = els.settingsPass.value.trim();
         const displayName = els.settingsDisplayName.value.trim();
-        const replyTo = els.settingsReplyTo.value.trim() || 'info@edgei.org';
+        const replyTo = els.settingsReplyTo.value.trim();
 
-        // Validation
         if (!email.endsWith('@kiit.ac.in')) {
             showToast('Email must be @kiit.ac.in', 'error');
             return;
         }
-
         if (!pass) {
             showToast('App Password is required', 'error');
             return;
         }
 
         const creds = { email, pass, displayName, replyTo };
-        localStorage.setItem('kiit_mailer_settings', JSON.stringify(creds));
+        localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(creds));
         state.credentials = creds;
 
-        // Update Profile
-        els.userNameDisplay.textContent = displayName || email.split('@')[0];
-        els.userAvatar.textContent = (displayName || email).charAt(0).toUpperCase();
+        const dn = displayName || email.split('@')[0];
+        els.userNameDisplay.textContent = dn;
+        els.userAvatar.textContent = dn.charAt(0).toUpperCase();
 
-        showToast('Settings Saved', 'success');
+        showToast('Settings saved', 'success');
     });
 }
 
-
-// --- Quill Editor ---
-function initQuill() {
-    const Font = Quill.import('formats/font');
-    Font.whitelist = ['inter', 'roboto', 'lato', 'montserrat', 'oswald', 'merriweather'];
-    Quill.register(Font, true);
-
-    state.quill = new Quill('#editor-container', {
-        theme: 'snow',
-        placeholder: 'Compose your email...',
-        modules: {
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                [{ 'font': Font.whitelist }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                ['link', 'image', 'clean']
-            ]
-        }
-    });
-
-    // Default Content & Styles
-    const fontLink = '<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700;800&display=swap" rel="stylesheet">';
-    const styleBlock = `<style>
-    /* Mobile Optimization */
-    @media only screen and (max-width: 600px) {
-        .main-table { width: 100% !important; max-width: 100% !important; }
-        .mobile-padding { padding-left: 20px !important; padding-right: 20px !important; }
-        .stack-column { display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 20px !important; }
-        .stack-column-last { display: block !important; width: 100% !important; border-left: none !important; border-top: 1px solid #eeeeee !important; padding-top: 20px !important; padding-left: 0 !important; }
-        .mobile-button { width: 100% !important; display: block !important; box-sizing: border-box !important; }
-    }
-</style>`;
-
-    const defaultSubject = 'Invited Call For Papers: EDGEi-2026, Malaysia || Springer Series (Scopus)';
-
-    // We construct the full HTML for the clipboard (Quill will parse what it can)
-    // We also store this to wrap the outgoing mail later
-    const fullDefaultHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<title>EDGEI-2026 Invitation</title>
-<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-    /* Global Resets */
-    body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    
-    /* Dark Mode Overrides (Works in Apple Mail, Outlook, Gmail Web) */
-    @media (prefers-color-scheme: dark) {
-        .body-bg { background-color: #121212 !important; }
-        .content-bg { background-color: #121212 !important; color: #e0e0e0 !important; }
-        .text-primary { color: #e0e0e0 !important; }
-        .text-secondary { color: #bbbbbb !important; }
-        .header-blue { color: #6fa8dc !important; } /* Lighter blue for dark mode */
-        .link-blue { color: #6fa8dc !important; }
-        .box-light { background-color: #1e1e1e !important; border-color: #444444 !important; }
-        .divider { border-top: 1px solid #444444 !important; }
-        .border-color { border-color: #444444 !important; }
-        .schedule-header { background-color: #2c2c2c !important; color: #ffffff !important; }
-        .deadline-box { background-color: #2a1515 !important; border-color: #5c2b2b !important; }
-        .deadline-text { color: #ff9999 !important; }
-        .footer-bg { background-color: #121212 !important; border-top: 1px solid #333333 !important; }
-    }
-
-    /* Mobile Optimization */
-    @media only screen and (max-width: 600px) {
-        .main-table { width: 100% !important; max-width: 100% !important; }
-        .mobile-padding { padding-left: 20px !important; padding-right: 20px !important; }
-        .stack-column { display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 20px !important; border-right: none !important; }
-        .stack-column-last { display: block !important; width: 100% !important; border-left: none !important; border-top: 1px solid #eeeeee !important; padding-top: 20px !important; padding-left: 0 !important; }
-        /* Dark Mode Mobile Border Fix */
-        @media (prefers-color-scheme: dark) {
-           .stack-column-last { border-top: 1px solid #444444 !important; }
-        }
-        .mobile-button { width: 100% !important; display: block !important; box-sizing: border-box !important; }
-    }
-</style>
-</head>
-
-<body class="body-bg" style="margin:0; padding:0; background-color:#ffffff; color:#222222;">
-
-<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;">
-<tr>
-<td align="center" style="padding: 20px 0;">
-
-<table class="main-table content-bg" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; max-width:600px; width:100%; margin:0 auto;">
-
-    <tr>
-        <td style="padding:30px 44px 0 44px;" class="mobile-padding">
-            <h1 class="header-blue" style="
-                margin:0 0 10px 0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:26px;
-                font-weight:800;
-                color:#0b5394;
-                line-height: 1.1;
-            ">
-                International Conference on<br>Edge Intelligence (EDGEI-2026)
-            </h1>
-
-            <p class="text-primary" style="
-                margin:0 0 12px 0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:16px;
-                font-weight:500;
-                color:#333333;
-                line-height: 1.4;
-            ">
-                <strong>16-17 May, 2026</strong><br>
-                Proceedings by <strong>Springer</strong> | Indexed by <strong>SCOPUS</strong><br>
-                <a href="https://edgei.org" class="link-blue" style="color:#0b5394; text-decoration:underline;">www.edgei.org</a>
-            </p>
-
-            <div class="box-light" style="
-                background-color: #f7f9fc;
-                border-left: 4px solid #0b5394;
-                padding: 10px 15px;
-                margin-bottom: 5px;
-            ">
-                <p class="text-secondary" style="
-                    margin:0;
-                    font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                    font-size:16px;
-                    color:#555555;
-                    line-height:1.4;
-                ">
-                    <strong>Organizer:</strong><br>
-                    Spectrum International University College, Malaysia
-                </p>
-            </div>
-        </td>
-    </tr>
-
-    <tr>
-        <td style="padding:20px 44px 0 44px;" class="mobile-padding">
-            <hr class="divider" style="border:none; border-top:1px solid #eeeeee; margin:0;">
-        </td>
-    </tr>
-
-    <tr>
-        <td style="padding:24px 44px;" class="mobile-padding">
-            <p class="text-primary" style="
-                margin:0 0 16px 0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:18px;
-                font-weight:500;
-                color:#222222;
-                line-height:1.6;
-            ">
-                Dear {Name},
-            </p>
-
-            <p class="text-primary" style="
-                margin:0 0 16px 0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:18px;
-                font-weight:500;
-                color:#222222;
-                line-height:1.6;
-            ">
-                The <strong>EDGEI-2026</strong> conference will be conducted in <strong>Hybrid mode</strong>. We invite you to submit your research to this premier forum.
-            </p>
-        </td>
-    </tr>
-
-    <tr>
-        <td style="padding:0 44px 24px 44px;" class="mobile-padding">
-            <table class="border-color" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
-                <tr>
-                    <td colspan="2" class="schedule-header" style="background-color:#f0f4f8; padding:10px 20px; border-bottom:1px solid #e0e0e0;">
-                        <p class="schedule-header" style="margin:0; font-family:'EB Garamond', serif; font-size:16px; font-weight:700; color:#0b5394;">
-                            Hybrid Schedule
-                        </p>
-                    </td>
-                </tr>
-                <tr>
-                    <td width="100%" style="padding:0;">
-                        <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                            <tr>
-                                <td class="stack-column border-color" width="50%" valign="top" style="padding:20px; border-right:1px solid #e0e0e0;">
-                                    <p class="text-primary" style="margin:0 0 5px 0; font-family:'EB Garamond', serif; font-size:18px; font-weight:700; color:#222222;">
-                                        Physical Mode
-                                    </p>
-                                    <p class="text-secondary" style="margin:0; font-family:'EB Garamond', serif; font-size:16px; color:#444444; line-height:1.4;">
-                                        May 16, 2026 (Wednesday)<br>
-                                        Spectrum International University College, Malaysia
-                                    </p>
-                                </td>
-                                <td class="stack-column-last" width="50%" valign="top" style="padding:20px;">
-                                    <p class="text-primary" style="margin:0 0 5px 0; font-family:'EB Garamond', serif; font-size:18px; font-weight:700; color:#222222;">
-                                        Online Mode
-                                    </p>
-                                    <p class="text-secondary" style="margin:0; font-family:'EB Garamond', serif; font-size:16px; color:#444444; line-height:1.4;">
-                                        May 17, 2026 (Thursday)<br>
-                                        Google Meet Platform
-                                    </p>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-        </td>
-    </tr>
-
-    <tr>
-        <td style="padding:0 44px 10px 44px;" class="mobile-padding">
-             <p class="text-primary" style="
-                margin:0 0 10px 0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:18px;
-                color:#222222;
-                line-height:1.6;
-            ">
-                <strong>Publication & Indexing:</strong><br>
-                All EDGEI-2026 registered and presented papers will be published in conference proceedings by <strong>Springer</strong>. Papers published in books under this series are indexed by <strong>SCOPUS</strong>, etc.
-            </p>
-            <p class="text-primary" style="
-                margin:0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:18px;
-                color:#222222;
-                line-height:1.6;
-            ">
-                <strong>Topics of Interest:</strong><br>
-                Submissions of high-quality papers are expected in areas of research and application in Edge AI hardware, federated and collaborative learning at the edge, low-latency and energy-efficient edge intelligence, privacy-preserving edge analytics and real-world applications such as smart cities, autonomous systems, and industrial IoT.
-            </p>
-        </td>
-    </tr>
-
-    <tr>
-        <td style="padding:20px 44px 28px 44px;" class="mobile-padding">
-            <div class="deadline-box" style="background-color:#fff5f5; border:1px dashed #d1a3a3; padding:12px; border-radius:4px; text-align:center;">
-                <p class="deadline-text" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:15px; font-weight:700; color:#a61c00;">
-                    Paper Submission Deadline: 10 March 2026
-                </p>
-            </div>
-        </td>
-    </tr>
-
-    <tr>
-        <td align="center" style="padding:0 44px 32px 44px;" class="mobile-padding">
-            <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 0 15px 0;">
-                <tr>
-                    <td align="center" bgcolor="#0b5394" style="border-radius: 4px;">
-                        <a href="https://cmt3.research.microsoft.com/User/Login?ReturnUrl=%2Fedgei2026" target="_blank" class="mobile-button" style="
-                            font-size: 16px;
-                            font-family: Arial, Helvetica, sans-serif;
-                            color: #ffffff;
-                            text-decoration: none;
-                            padding: 14px 30px;
-                            border: 1px solid #0b5394;
-                            display: inline-block;
-                            font-weight: 700;
-                            border-radius: 4px;
-                        ">
-                            Submit Paper via Microsoft CMT
-                        </a>
-                    </td>
-                </tr>
-            </table>
-
-            <table border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                    <td align="center" style="border-radius: 4px;">
-                        <a href="https://edgei.org" target="_blank" class="mobile-button link-blue" style="
-                            font-size: 15px;
-                            font-family: Arial, Helvetica, sans-serif;
-                            color: #0b5394;
-                            text-decoration: none;
-                            padding: 12px 24px;
-                            border: 2px solid #0b5394;
-                            display: inline-block;
-                            font-weight: 700;
-                            border-radius: 4px;
-                        ">
-                            Visit Conference Website
-                        </a>
-                    </td>
-                </tr>
-            </table>
-        </td>
-    </tr>
-
-    <tr>
-        <td class="footer-bg" style="padding:24px 44px 36px 44px; border-top:1px solid #eeeeee; background-color: #ffffff;" class="mobile-padding">
-            <p class="text-primary" style="
-                margin:0 0 5px 0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:18px;
-                color:#222222;
-                font-weight: 500;
-            ">
-                Sincerely Yours,
-            </p>
-            <p class="text-secondary" style="
-                margin:0;
-                font-family:'EB Garamond', Garamond, 'Times New Roman', serif;
-                font-size:17px;
-                color:#444444;
-                line-height:1.5;
-            ">
-                On behalf of Organizing Chair<br>
-                <strong>EDGEI-2026</strong><br>
-                <span style="font-size:15px;">Email: <a href="mailto:info@edgei.org" class="link-blue" style="color:#0b5394; text-decoration:none;">info@edgei.org</a></span>
-            </p>
-        </td>
-    </tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>`;
-
-    // Make state global accessible for wrapper
-    state.fontLink = fontLink;
-    state.styleBlock = styleBlock;
-
-    // Inject styles into the current document head so the editor renders the font
-    document.head.insertAdjacentHTML('beforeend', fontLink);
-
-    // Initial Default Content Load
-    els.htmlEditor.value = fullDefaultHTML;
-    // We also load it into Quill just in case (optional, but good for sync)
-    // Quill might strip some things, but that's expected for Rich Text mode
-    state.quill.clipboard.dangerouslyPasteHTML(fullDefaultHTML);
-
-    // Set Subject
-    if (!els.subject.value) {
-        els.subject.value = defaultSubject;
-    }
-}
-
-// --- Editor Mode & Preview ---
-function setupEditorMode() {
-    // Toggle Logic with Warning
-    els.editorToggles.forEach(radio => {
-        // Find the label wrapper to add click event, or just handle change
-        // We need to intercept the change if possible, or rollback.
-        // Easier: uncheck the new one if cancelled? 
-        // Better: Make custom buttons, but radio is standard.
-        // Let's rely on 'click' to prevent default if needed, but 'change' is safer for state.
-
-        radio.addEventListener('click', (e) => {
-            const newMode = e.target.value;
-            if (newMode === state.editorMode) return; // No change
-
-            // Prevent immediate switch
-            e.preventDefault();
-
-            state.pendingEditorMode = newMode;
-            els.modeWarningModal.classList.remove('hidden');
-        });
-    });
-
-    // Warning Modal Actions
-    els.confirmModeSwitch.addEventListener('click', () => {
-        state.editorMode = state.pendingEditorMode;
-
-        // Manually check the radio button (since we prevented default)
-        els.editorToggles.forEach(r => r.checked = (r.value === state.editorMode));
-
-        updateEditorVisibility(true); // true = clear other
-        els.modeWarningModal.classList.add('hidden');
-    });
-
-    els.cancelModeSwitch.addEventListener('click', () => {
-        state.pendingEditorMode = null;
-        els.modeWarningModal.classList.add('hidden');
-    });
-
-    // Preview Logic
-    els.previewBtn.addEventListener('click', showPreview);
-    els.closePreviewBtn.addEventListener('click', () => {
-        els.previewModal.classList.add('hidden');
-    });
-
-    // Close preview on clicking outside
-    els.previewModal.addEventListener('click', (e) => {
-        if (e.target === els.previewModal) {
-            els.previewModal.classList.add('hidden');
-        }
-    });
-}
-
-function updateEditorVisibility(clearOther = false) {
-    if (state.editorMode === 'html') {
-        els.htmlEditorContainer.style.display = 'block';
-        els.richEditorContainer.style.display = 'none';
-
-        if (clearOther) {
-            state.quill.setText(''); // Clear Rich Text
-            showToast('Rich Text Editor cleared for safety.', 'info');
-        }
-    } else {
-        els.htmlEditorContainer.style.display = 'none';
-        els.richEditorContainer.style.display = 'block';
-
-        if (clearOther) {
-            els.htmlEditor.value = ''; // Clear HTML
-            showToast('HTML Editor cleared for safety.', 'info');
-        }
-    }
-}
-
-function showPreview() {
-    let content = '';
-    if (state.editorMode === 'html') {
-        content = els.htmlEditor.value;
-    } else {
-        // Use the same wrapper logic as sending
-        content = wrapRichContent(state.quill.root.innerHTML);
-    }
-
-    // Mock variable replacement
-    // If CSV data exists, use the first row. Else use placeholders.
-    if (state.csvData && state.csvData.length > 0) {
-        const row = state.csvData[0];
-        state.csvHeaders.forEach(h => {
-            const reg = new RegExp(`{${h}}`, 'g');
-            content = content.replace(reg, row[h] || `[${h}]`);
-        });
-    } else {
-        // Just generic replace for preview
-        content = content.replace(/{Name}/g, "John Doe");
-        content = content.replace(/{Email}/g, "john@example.com");
-    }
-
-    els.previewFrame.srcdoc = content;
-    els.previewModal.classList.remove('hidden');
-}
-
-function wrapRichContent(html) {
-    if (!html.includes('<!DOCTYPE html>')) {
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-${state.fontLink || ''}
-${state.styleBlock || ''}
-</head>
-<body style="margin:0; padding:0; background-color:#f4f4f4;">
-${html}
-</body>
-</html>`;
-    }
-    return html;
-}
-
-
-
-// --- Toasts & Logs ---
-function showToast(msg, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    let icon = 'ℹ️';
-    if (type === 'success') icon = '✅';
-    if (type === 'error') icon = '❌';
-    if (type === 'warning') icon = '⚠️';
-
-    toast.innerHTML = `<span style="font-size:1.2em">${icon}</span> <span>${msg}</span>`;
-    els.toastContainer.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'slideIn 0.3s reverse';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
-}
-
-// Global Log Function
-function log(type, msg) {
-    console.log(`[${type}] ${msg}`);
-
-    // 1. Add to DOM
-    if (els.logTerminal) {
-        const t = new Date().toLocaleTimeString();
-        const div = document.createElement('div');
-        div.className = `log-line ${type}`;
-        div.textContent = `[${t}] ${msg}`;
-        els.logTerminal.appendChild(div);
-        els.logTerminal.scrollTop = els.logTerminal.scrollHeight;
-    }
-
-    // 2. Save to Storage
-    const logs = JSON.parse(localStorage.getItem('iqac_logs') || '[]');
-    logs.push({ type, msg, time: new Date().toLocaleTimeString() });
-    if (logs.length > 200) logs.shift();
-    localStorage.setItem('iqac_logs', JSON.stringify(logs));
-}
-
-function loadHistory() {
-    const logs = JSON.parse(localStorage.getItem('iqac_logs') || '[]');
-    if (!els.logTerminal) return;
-
-    els.logTerminal.innerHTML = '<div class="log-line system">System ready.</div>'; // Reset first
-
-    logs.forEach(l => {
-        const div = document.createElement('div');
-        div.className = `log-line ${l.type}`;
-        div.textContent = `[${l.time}] ${l.msg}`;
-        els.logTerminal.appendChild(div);
-    });
-    els.logTerminal.scrollTop = els.logTerminal.scrollHeight;
-}
-
-function setupLogs() {
-    if (els.clearLogsBtn) {
-        els.clearLogsBtn.addEventListener('click', () => {
-            if (els.logTerminal) els.logTerminal.innerHTML = '<div class="log-line system">System Ready. Local Logs Cleared.</div>';
-            localStorage.removeItem('iqac_logs');
-        });
-    }
-}
-
-// --- Tab Navigation ---
+// ---------- Tabs ----------
 function setupTabs() {
     els.tabs.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -710,23 +304,95 @@ function setupTabs() {
     });
 }
 
-// --- CSV ---
+// ---------- Send Mode Toggle ----------
+function setupSendModeToggle() {
+    els.sendModeSeg.querySelectorAll('.seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            els.sendModeSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.sendMode = btn.dataset.mode;
+            els.singleFields.style.display = state.sendMode === 'single' ? 'block' : 'none';
+            els.bulkFields.style.display = state.sendMode === 'bulk' ? 'block' : 'none';
+            els.sendBtn.textContent = state.sendMode === 'single' ? 'Send Email' : 'Send Bulk Emails';
+            refreshPlaceholders();
+        });
+    });
+}
+
+// ---------- Single Extras ----------
+function setupSingleExtras() {
+    els.addSingleFieldBtn.addEventListener('click', () => {
+        state.singleExtras.push({ key: '', value: '' });
+        renderSingleExtras();
+    });
+}
+
+function renderSingleExtras() {
+    els.singleCustomFields.innerHTML = '';
+    state.singleExtras.forEach((f, idx) => {
+        const row = document.createElement('div');
+        row.className = 'custom-field-row';
+        row.innerHTML = `
+            <input type="text" placeholder="Field name (e.g. Department)" value="${escapeAttr(f.key)}" data-i="${idx}" data-k="key">
+            <input type="text" placeholder="Value" value="${escapeAttr(f.value)}" data-i="${idx}" data-k="value">
+            <button type="button" class="icon-btn" data-remove="${idx}" title="Remove">✕</button>
+        `;
+        els.singleCustomFields.appendChild(row);
+    });
+    els.singleCustomFields.querySelectorAll('input').forEach(inp => {
+        inp.addEventListener('input', e => {
+            const i = +e.target.dataset.i;
+            const k = e.target.dataset.k;
+            state.singleExtras[i][k] = e.target.value;
+            refreshPlaceholders();
+        });
+    });
+    els.singleCustomFields.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const i = +e.currentTarget.dataset.remove;
+            state.singleExtras.splice(i, 1);
+            renderSingleExtras();
+            refreshPlaceholders();
+        });
+    });
+}
+
+function escapeAttr(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+// ---------- Bulk Source Toggle ----------
+function setupBulkSourceToggle() {
+    els.bulkSourceSeg.querySelectorAll('.seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            els.bulkSourceSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.bulkSource = btn.dataset.source;
+            els.bulkCsv.style.display = state.bulkSource === 'csv' ? 'block' : 'none';
+            els.bulkManual.style.display = state.bulkSource === 'manual' ? 'block' : 'none';
+            refreshPlaceholders();
+        });
+    });
+}
+
+// ---------- CSV ----------
 function setupCSV() {
-    els.csvFile.addEventListener('change', (e) => {
+    els.csvFile.addEventListener('change', e => {
         const file = e.target.files[0];
         if (file) parseCSV(file);
     });
 
     els.downloadTmplBtn.addEventListener('click', () => {
-        const headers = ['Name', 'Email'];
-        const csvContent = headers.join(',') + '\nJohn Doe,john.doe@kiit.ac.in';
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
+        const csv = 'Name,Email\nJohn Doe,john.doe@example.com\nJane Roe,jane.roe@example.com\n';
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = 'kiit_mailer_template.csv';
-        a.click();
-        window.URL.revokeObjectURL(url);
+        a.href = url; a.download = 'kiit_mailer_template.csv'; a.click();
+        URL.revokeObjectURL(url);
     });
 }
 
@@ -735,62 +401,277 @@ function parseCSV(file) {
     Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results) => {
+        complete: results => {
             if (results.data && results.data.length > 0) {
                 state.csvData = results.data;
                 state.csvHeaders = results.meta.fields;
-                els.csvStatus.textContent = `Loaded ${results.data.length} recipients. ` +
-                    `Columns: ${state.csvHeaders.join(', ')}`;
-                updatePlaceholders();
-                showToast(`CSV Loaded: ${results.data.length} rows`, 'success');
+                els.csvStatus.textContent = `Loaded ${results.data.length} recipients · Columns: ${state.csvHeaders.join(', ')}`;
+                refreshPlaceholders();
+                showToast(`CSV loaded: ${results.data.length} rows`, 'success');
             } else {
                 els.csvStatus.textContent = 'Error: No data found';
-                showToast('CSV Parse Error: Empty or invalid file', 'error');
+                showToast('CSV parse error: empty or invalid file', 'error');
             }
         },
-        error: (err) => {
+        error: err => {
             els.csvStatus.textContent = 'Error';
-            showToast(`CSV Error: ${err.message}`, 'error');
+            showToast(`CSV error: ${err.message}`, 'error');
         }
     });
 }
 
-function updatePlaceholders() {
+// ---------- Manual Grid ----------
+function setupManualGrid() {
+    els.addRowBtn.addEventListener('click', () => {
+        const row = {};
+        state.manualColumns.forEach(c => row[c] = '');
+        state.manualRows.push(row);
+        renderManualGrid();
+    });
+
+    els.addColBtn.addEventListener('click', () => {
+        const name = prompt('New column name (becomes a placeholder like {Name}):');
+        if (!name) return;
+        const clean = name.trim();
+        if (!clean) return;
+        if (state.manualColumns.includes(clean)) {
+            showToast('Column already exists', 'warning');
+            return;
+        }
+        state.manualColumns.push(clean);
+        state.manualRows.forEach(r => r[clean] = '');
+        renderManualGrid();
+        refreshPlaceholders();
+    });
+
+    els.clearGridBtn.addEventListener('click', () => {
+        if (!confirm('Clear all manual entries?')) return;
+        state.manualColumns = ['Name', 'Email'];
+        state.manualRows = [{ Name: '', Email: '' }];
+        renderManualGrid();
+        refreshPlaceholders();
+    });
+}
+
+function renderManualGrid() {
+    const t = els.manualGrid;
+    t.innerHTML = '';
+
+    // Header
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    state.manualColumns.forEach((col, ci) => {
+        const th = document.createElement('th');
+        const isRequired = col === 'Email';
+        th.innerHTML = `
+            <div class="th-inner">
+                <input type="text" class="col-name" data-ci="${ci}" value="${escapeAttr(col)}" ${isRequired ? 'readonly title="Required column"' : ''}>
+                ${isRequired ? '' : `<button type="button" class="icon-btn" data-delcol="${ci}" title="Delete column">✕</button>`}
+            </div>
+        `;
+        trh.appendChild(th);
+    });
+    const thAct = document.createElement('th');
+    thAct.style.width = '40px';
+    trh.appendChild(thAct);
+    thead.appendChild(trh);
+    t.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement('tbody');
+    state.manualRows.forEach((row, ri) => {
+        const tr = document.createElement('tr');
+        state.manualColumns.forEach(col => {
+            const td = document.createElement('td');
+            const inputType = col === 'Email' ? 'email' : 'text';
+            td.innerHTML = `<input type="${inputType}" data-ri="${ri}" data-col="${escapeAttr(col)}" value="${escapeAttr(row[col] || '')}" placeholder="${escapeAttr(col)}">`;
+            tr.appendChild(td);
+        });
+        const actTd = document.createElement('td');
+        actTd.innerHTML = `<button type="button" class="icon-btn" data-delrow="${ri}" title="Delete row">✕</button>`;
+        tr.appendChild(actTd);
+        tbody.appendChild(tr);
+    });
+    t.appendChild(tbody);
+
+    // Listeners
+    t.querySelectorAll('input.col-name').forEach(inp => {
+        inp.addEventListener('change', e => {
+            const ci = +e.target.dataset.ci;
+            const newName = e.target.value.trim();
+            const oldName = state.manualColumns[ci];
+            if (!newName) { e.target.value = oldName; return; }
+            if (state.manualColumns.includes(newName) && newName !== oldName) {
+                showToast('Column name must be unique', 'error');
+                e.target.value = oldName; return;
+            }
+            state.manualColumns[ci] = newName;
+            state.manualRows.forEach(r => { r[newName] = r[oldName] || ''; if (newName !== oldName) delete r[oldName]; });
+            renderManualGrid();
+            refreshPlaceholders();
+        });
+    });
+    t.querySelectorAll('[data-delcol]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const ci = +e.currentTarget.dataset.delcol;
+            const col = state.manualColumns[ci];
+            state.manualColumns.splice(ci, 1);
+            state.manualRows.forEach(r => delete r[col]);
+            renderManualGrid();
+            refreshPlaceholders();
+        });
+    });
+    t.querySelectorAll('tbody input').forEach(inp => {
+        inp.addEventListener('input', e => {
+            const ri = +e.target.dataset.ri;
+            const col = e.target.dataset.col;
+            state.manualRows[ri][col] = e.target.value;
+            updateGridStatus();
+        });
+    });
+    t.querySelectorAll('[data-delrow]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const ri = +e.currentTarget.dataset.delrow;
+            state.manualRows.splice(ri, 1);
+            if (state.manualRows.length === 0) {
+                const empty = {}; state.manualColumns.forEach(c => empty[c] = '');
+                state.manualRows.push(empty);
+            }
+            renderManualGrid();
+        });
+    });
+
+    updateGridStatus();
+}
+
+function updateGridStatus() {
+    const valid = state.manualRows.filter(r => (r.Email || '').trim() !== '').length;
+    els.gridStatus.textContent = `${state.manualRows.length} row(s) · ${valid} with email`;
+}
+
+// ---------- Quill / Editors ----------
+function initQuill() {
+    state.quill = new Quill('#editor-container', {
+        theme: 'snow',
+        placeholder: 'Compose your email...',
+        modules: {
+            toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ color: [] }, { background: [] }],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                [{ align: [] }],
+                ['link', 'image', 'blockquote'],
+                ['clean']
+            ]
+        }
+    });
+
+    els.htmlEditor.value = DEFAULT_HTML;
+    els.textEditor.value = DEFAULT_TEXT;
+}
+
+function setupEditorMode() {
+    els.editorSeg.querySelectorAll('.seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const newMode = btn.dataset.editor;
+            if (newMode === state.editorMode) return;
+            // Plain text vs HTML/Rich are independent; only warn between html<->rich
+            const needsWarn = (state.editorMode === 'html' && newMode === 'rich') ||
+                              (state.editorMode === 'rich' && newMode === 'html');
+            if (needsWarn) {
+                state.pendingEditorMode = newMode;
+                els.modeWarningModal.classList.remove('hidden');
+            } else {
+                applyEditorMode(newMode, false);
+            }
+        });
+    });
+
+    els.confirmModeSwitch.addEventListener('click', () => {
+        applyEditorMode(state.pendingEditorMode, true);
+        els.modeWarningModal.classList.add('hidden');
+    });
+    els.cancelModeSwitch.addEventListener('click', () => {
+        state.pendingEditorMode = null;
+        els.modeWarningModal.classList.add('hidden');
+    });
+}
+
+function applyEditorMode(mode, clearOther) {
+    state.editorMode = mode;
+    els.editorSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.editor === mode));
+    els.htmlEditorContainer.style.display = mode === 'html' ? 'block' : 'none';
+    els.richEditorContainer.style.display = mode === 'rich' ? 'block' : 'none';
+    els.textEditorContainer.style.display = mode === 'text' ? 'block' : 'none';
+
+    if (clearOther) {
+        if (mode === 'html') state.quill.setText('');
+        else if (mode === 'rich') els.htmlEditor.value = '';
+    }
+}
+
+// ---------- Placeholder Toolbar ----------
+function refreshPlaceholders() {
+    const headers = currentHeaders();
     els.placeholderToolbar.innerHTML = '';
-    state.csvHeaders.forEach(header => {
+    if (headers.length === 0) return;
+    headers.forEach(h => {
         const btn = document.createElement('button');
-        btn.textContent = `{${header}}`;
+        btn.type = 'button';
+        btn.textContent = `{${h}}`;
         btn.className = 'placeholder-btn';
-        btn.onclick = () => {
-            const range = state.quill.getSelection(true);
-            state.quill.insertText(range.index, `{${header}}`);
-        };
+        btn.title = `Insert {${h}} placeholder`;
+        btn.onclick = () => insertPlaceholder(h);
         els.placeholderToolbar.appendChild(btn);
     });
 }
 
-// --- Attachments & Size Limit ---
+function insertPlaceholder(h) {
+    const token = `{${h}}`;
+    if (state.editorMode === 'html') {
+        insertAtCursor(els.htmlEditor, token);
+    } else if (state.editorMode === 'text') {
+        insertAtCursor(els.textEditor, token);
+    } else {
+        const range = state.quill.getSelection(true);
+        state.quill.insertText(range ? range.index : 0, token);
+    }
+}
+
+function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + text.length;
+    textarea.focus();
+}
+
+function currentHeaders() {
+    if (state.sendMode === 'single') {
+        const set = new Set(['Name', 'Email']);
+        state.singleExtras.forEach(f => { if (f.key && f.key.trim()) set.add(f.key.trim()); });
+        return [...set];
+    }
+    if (state.bulkSource === 'csv') {
+        return state.csvHeaders && state.csvHeaders.length ? state.csvHeaders : [];
+    }
+    return state.manualColumns.slice();
+}
+
+// ---------- Attachments ----------
 function setupAttachments() {
-    els.attachInput.addEventListener('change', (e) => {
+    els.attachInput.addEventListener('change', e => {
         const newFiles = Array.from(e.target.files);
         let currentSize = state.attachments.reduce((acc, f) => acc + f.size, 0);
-        const validFiles = [];
+        const valid = [];
         let skipped = false;
-
         newFiles.forEach(f => {
-            if (currentSize + f.size > MAX_SIZE_MB * 1024 * 1024) {
-                skipped = true;
-            } else {
-                currentSize += f.size;
-                validFiles.push(f);
-            }
+            if (currentSize + f.size > MAX_SIZE_MB * 1024 * 1024) skipped = true;
+            else { currentSize += f.size; valid.push(f); }
         });
-
-        if (skipped) {
-            showToast(`Some files were skipped. Total size exceeds ${MAX_SIZE_MB} MB.`, 'warning');
-        }
-
-        state.attachments = [...state.attachments, ...validFiles];
+        if (skipped) showToast(`Some files skipped — total exceeds ${MAX_SIZE_MB} MB`, 'warning');
+        state.attachments = [...state.attachments, ...valid];
         renderAttachments();
         els.attachInput.value = '';
     });
@@ -798,181 +679,380 @@ function setupAttachments() {
     els.clearAttachmentsBtn.addEventListener('click', () => {
         state.attachments = [];
         renderAttachments();
-        // Maybe reload default?
-        // loadDefaultAttachment(); 
-        // User asked to clear, so better to clear ALL or restore default? 
-        // "Clear" usually means empty. 
     });
 }
 
-
 function renderAttachments() {
     els.attachList.innerHTML = '';
+    els.clearAttachmentsBtn.style.display = state.attachments.length > 0 ? 'inline-block' : 'none';
 
-    // Toggle Clear Button Visibility
-    if (state.attachments.length > 0) {
-        els.clearAttachmentsBtn.style.display = 'inline-block';
-    } else {
-        els.clearAttachmentsBtn.style.display = 'none';
-    }
-
-    let totalSize = 0;
-
-    state.attachments.forEach((file, index) => {
-        totalSize += file.size;
+    let total = 0;
+    state.attachments.forEach((file, idx) => {
+        total += file.size;
         const item = document.createElement('div');
-        item.style.cssText = 'background: #333; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 8px; margin: 4px; font-size: 0.85rem;';
-
-        const name = document.createElement('span');
-        name.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
-
-        const remove = document.createElement('button');
-        remove.textContent = '×';
-        remove.style.cssText = 'background: none; border: none; color: #ff5555; cursor: pointer; font-weight: bold;';
-        remove.onclick = () => {
-            state.attachments.splice(index, 1);
+        item.className = 'attach-chip';
+        item.innerHTML = `
+            <span>📎 ${file.name} <span class="muted-small">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span></span>
+            <button type="button" class="x" data-i="${idx}">×</button>
+        `;
+        item.querySelector('.x').addEventListener('click', () => {
+            state.attachments.splice(idx, 1);
             renderAttachments();
-        };
-
-        item.appendChild(name);
-        item.appendChild(remove);
+        });
         els.attachList.appendChild(item);
     });
 
-    const totalMB = (totalSize / 1024 / 1024).toFixed(2);
-    if (totalSize > 0) {
+    if (total > 0) {
         const info = document.createElement('div');
-        info.style.color = totalSize > MAX_SIZE_MB * 1024 * 1024 ? '#ff5555' : '#aaa';
-        info.style.fontSize = '0.8rem';
-        info.style.marginTop = '4px';
-        info.textContent = `Total: ${totalMB} MB / ${MAX_SIZE_MB} MB`;
+        info.className = 'attach-total';
+        info.style.color = total > MAX_SIZE_MB * 1024 * 1024 ? 'var(--danger)' : 'var(--text-muted)';
+        info.textContent = `Total: ${(total / 1024 / 1024).toFixed(2)} MB / ${MAX_SIZE_MB} MB`;
         els.attachList.appendChild(info);
     }
 }
 
-// --- Sending ---
-function setupSending() {
-    els.sendBtn.addEventListener('click', async () => {
-        // Validation of Settings
-        if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
-            showToast('Please configure settings strictly first!', 'error');
-            els.settingsTabBtn.click();
-            return;
-        }
-
-        const subject = els.subject.value;
-        let finalHtmlPayload = '';
-
-        if (state.editorMode === 'html') {
-            finalHtmlPayload = els.htmlEditor.value;
-            // Validate basic HTML structure
-            if (!finalHtmlPayload.trim()) {
-                showToast('Email body is empty', 'warning'); return;
-            }
-        } else {
-            const htmlContent = state.quill.root.innerHTML;
-            finalHtmlPayload = wrapRichContent(htmlContent);
-        }
-
-        if (!subject) { showToast('Please enter a subject', 'warning'); return; }
-
-        if (!state.csvData) { showToast('Please upload a CSV file', 'warning'); return; }
-
-        const emailKey = Object.keys(state.csvData[0]).find(k => k.toLowerCase() === 'email');
-        if (!emailKey) {
-            showToast("Error: CSV must have an 'Email' column", 'error');
-            return;
-        }
-
-        const total = state.csvData.length;
-        startProgress(total);
-
-        let successCount = 0;
-        for (let i = 0; i < total; i++) {
-            const row = state.csvData[i];
-            const email = row[emailKey] ? row[emailKey].toString().trim() : '';
-            if (!email) continue;
-
-            let customHtml = finalHtmlPayload;
-            state.csvHeaders.forEach(h => {
-                const reg = new RegExp(`{${h}}`, 'g');
-                customHtml = customHtml.replace(reg, row[h] || '');
-            });
-
-            const ok = await sendOne(email, subject, customHtml, i + 1, total);
-            if (ok) successCount++;
-        }
-
-        endProgress();
-        showToast(`Batch Finished. Sent ${successCount}/${total}`, 'success');
+// ---------- Preview ----------
+function setupPreview() {
+    els.previewBtn.addEventListener('click', openPreview);
+    els.closePreviewBtn.addEventListener('click', () => els.previewModal.classList.add('hidden'));
+    els.previewModal.addEventListener('click', e => {
+        if (e.target === els.previewModal) els.previewModal.classList.add('hidden');
     });
+
+    els.previewThemeSeg.querySelectorAll('.seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            els.previewThemeSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.previewTheme = btn.dataset.theme;
+            applyPreviewChrome();
+            renderPreviewBody();
+        });
+    });
+    els.previewViewportSeg.querySelectorAll('.seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            els.previewViewportSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.previewViewport = btn.dataset.viewport;
+            applyPreviewChrome();
+        });
+    });
+
+    els.previewRecipient.addEventListener('change', e => {
+        state.previewRowIndex = +e.target.value;
+        renderPreviewBody();
+    });
+}
+
+function getRecipients() {
+    if (state.sendMode === 'single') {
+        const row = { Name: els.singleName.value || '', Email: els.singleEmail.value || '' };
+        state.singleExtras.forEach(f => { if (f.key) row[f.key] = f.value; });
+        return [row];
+    }
+    if (state.bulkSource === 'csv') return state.csvData || [];
+    return state.manualRows.filter(r => (r.Email || '').trim() !== '');
+}
+
+function openPreview() {
+    const recipients = getRecipients();
+    // Populate recipient dropdown
+    els.previewRecipient.innerHTML = '';
+    if (recipients.length > 1) {
+        els.previewRecipient.style.display = 'inline-block';
+        recipients.forEach((r, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = `${r.Name || '(no name)'} <${r.Email || 'no-email'}>`;
+            els.previewRecipient.appendChild(opt);
+        });
+        state.previewRowIndex = 0;
+    } else {
+        els.previewRecipient.style.display = 'none';
+        state.previewRowIndex = 0;
+    }
+
+    applyPreviewChrome();
+    renderPreviewBody();
+    els.previewModal.classList.remove('hidden');
+}
+
+function applyPreviewChrome() {
+    els.gmailFrame.classList.toggle('dark', state.previewTheme === 'dark');
+    els.gmailFrame.classList.toggle('mobile', state.previewViewport === 'mobile');
+}
+
+function renderPreviewBody() {
+    const recipients = getRecipients();
+    const row = recipients[state.previewRowIndex] || { Name: 'John Doe', Email: 'john@example.com' };
+
+    // Subject + meta
+    const creds = state.credentials || {};
+    const fromName = creds.displayName || (creds.email ? creds.email.split('@')[0] : 'KIIT Mailer');
+    els.gmSubject.textContent = substitute(els.subject.value || '(no subject)', row);
+    els.gmFromName.textContent = fromName;
+    els.gmFromEmail.textContent = creds.email ? `<${creds.email}>` : '<sender@example.com>';
+    els.gmTo.textContent = row.Email || 'recipient@example.com';
+    els.gmAvatar.textContent = (fromName || 'K').charAt(0).toUpperCase();
+    els.gmDate.textContent = new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    // HTML body
+    let html = '';
+    if (state.editorMode === 'html') html = els.htmlEditor.value;
+    else if (state.editorMode === 'rich') html = wrapRichContent(state.quill.root.innerHTML);
+    else html = textToHtml(els.textEditor.value);
+
+    html = substitute(html, row);
+
+    // Inject color-scheme to simulate theme inside iframe
+    const themedHtml = injectColorScheme(html, state.previewTheme);
+    els.previewFrame.onload = () => {
+        try {
+            const doc = els.previewFrame.contentDocument;
+            if (!doc || !doc.body) return;
+            // Measure with a brief delay so fonts/images settle
+            const measure = () => {
+                const h = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+                els.previewFrame.style.height = Math.min(Math.max(h, 320), 2000) + 'px';
+            };
+            measure();
+            setTimeout(measure, 120);
+        } catch (e) { /* cross-origin: keep CSS height */ }
+    };
+    els.previewFrame.srcdoc = themedHtml;
+}
+
+function injectColorScheme(html, theme) {
+    // Light mode: render as-is (clients honor light backgrounds).
+    // Dark mode: simulate the *forced dark* algorithm that Gmail Android applies to
+    // emails not explicitly designed for dark mode — invert the document, then
+    // re-invert media so images/photos stay correct. Hue-rotate keeps colors.
+    let injected;
+    if (theme === 'dark') {
+        injected = `<style id="__kiit_theme">
+          :root { color-scheme: dark; }
+          html { background: #1f1f1f !important; }
+          html { filter: invert(1) hue-rotate(180deg); }
+          img, picture, video, svg, iframe, canvas,
+          [style*="background-image"], [data-skip-darken] {
+            filter: invert(1) hue-rotate(180deg);
+          }
+        </style>`;
+    } else {
+        injected = `<style id="__kiit_theme">:root { color-scheme: light; }</style>`;
+    }
+
+    let out = html;
+    if (/<\/head>/i.test(out)) {
+        out = out.replace(/<\/head>/i, injected + '</head>');
+    } else if (/<head[^>]*>/i.test(out)) {
+        out = out.replace(/<head[^>]*>/i, m => m + injected);
+    } else {
+        out = injected + out;
+    }
+    return out;
+}
+
+function substitute(str, row) {
+    if (!str) return str;
+    return String(str).replace(/\{([^{}]+)\}/g, (_m, key) => {
+        const v = row[key.trim()];
+        return v != null ? v : `{${key}}`;
+    });
+}
+
+function textToHtml(text) {
+    const escaped = String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const body = escaped.split(/\n/).map(l => l || '&nbsp;').join('<br>');
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="color-scheme" content="light dark"></head>
+<body style="margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#1f2328; background:#ffffff;">
+<div style="max-width:600px; margin:0 auto;">${body}</div>
+</body></html>`;
+}
+
+function wrapRichContent(html) {
+    if (/<!DOCTYPE/i.test(html)) return html;
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<style>
+  body { margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#1f2328; background:#ffffff; }
+  @media (prefers-color-scheme: dark) {
+    body { background:#0f1115 !important; color:#e6e8eb !important; }
+  }
+</style>
+</head>
+<body>
+<div style="max-width:600px; margin:0 auto;">${html}</div>
+</body>
+</html>`;
+}
+
+// ---------- Sending ----------
+function setupSending() {
+    els.sendBtn.addEventListener('click', sendAll);
+}
+
+async function sendAll() {
+    if (state.isSending) return;
+    if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
+        showToast('Please configure settings first', 'error');
+        els.settingsTabBtn.click();
+        return;
+    }
+
+    const subject = els.subject.value.trim();
+    if (!subject) { showToast('Please enter a subject', 'warning'); return; }
+
+    // Build payload — only the active editor's content is sent
+    let htmlPayload = '';
+    let textPayload = '';
+    if (state.editorMode === 'html') {
+        htmlPayload = els.htmlEditor.value;
+    } else if (state.editorMode === 'rich') {
+        htmlPayload = wrapRichContent(state.quill.root.innerHTML);
+    } else {
+        textPayload = els.textEditor.value || '';
+    }
+
+    if (!htmlPayload.trim() && !textPayload.trim()) {
+        showToast('Email body is empty', 'warning'); return;
+    }
+
+    const recipients = getRecipients();
+    if (recipients.length === 0) {
+        showToast(state.sendMode === 'single' ? 'Enter recipient email' : 'No recipients to send to', 'warning');
+        return;
+    }
+    // Validate emails
+    const valid = recipients.filter(r => /\S+@\S+\.\S+/.test((r.Email || '').trim()));
+    if (valid.length === 0) {
+        showToast('No valid email addresses found', 'error'); return;
+    }
+
+    const total = valid.length;
+    startProgress(total);
+    let success = 0;
+
+    for (let i = 0; i < total; i++) {
+        const row = valid[i];
+        const email = row.Email.trim();
+        const html = substitute(htmlPayload, row);
+        const text = textPayload ? substitute(textPayload, row) : '';
+        const subj = substitute(subject, row);
+        const ok = await sendOne(email, subj, html, text, i + 1, total);
+        if (ok) success++;
+    }
+
+    endProgress();
+    showToast(`Finished. Sent ${success}/${total}`, success === total ? 'success' : 'warning');
+}
+
+async function sendOne(to, subject, html, text, index, total) {
+    updateProgress(index, total);
+
+    const fd = new FormData();
+    fd.append('to', to);
+    fd.append('subject', subject);
+    if (html) fd.append('html', html);
+    if (text) fd.append('text', text);
+
+    fd.append('smtpUser', state.credentials.email);
+    fd.append('smtpPass', state.credentials.pass);
+    if (state.credentials.displayName) fd.append('displayName', state.credentials.displayName);
+    if (state.credentials.replyTo) fd.append('replyTo', state.credentials.replyTo);
+
+    state.attachments.forEach(f => fd.append('file', f));
+
+    try {
+        const res = await fetch('/api/send-mail', { method: 'POST', body: fd });
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); }
+        catch (e) { throw new Error(`Server: ${raw.substring(0, 120)}`); }
+        if (res.ok && data.success) {
+            log('success', `Sent to ${to}`);
+            return true;
+        } else {
+            log('error', `Failed → ${to}: ${data.error || 'Unknown error'}`);
+            return false;
+        }
+    } catch (err) {
+        log('error', `Error → ${to}: ${err.message}`);
+        return false;
+    }
 }
 
 function startProgress(total) {
     state.isSending = true;
     els.overlay.classList.remove('hidden');
     els.sendBtn.disabled = true;
-    log('system', `Starting batch of ${total} emails...`);
+    log('system', `Starting batch of ${total} email(s)...`);
 }
-
 function updateProgress(current, total) {
     const pct = Math.round((current / total) * 100);
     els.progressBar.style.width = `${pct}%`;
     els.progressText.textContent = `${current} / ${total}`;
     els.progressPercent.textContent = `${pct}%`;
 }
-
 function endProgress() {
     state.isSending = false;
     setTimeout(() => {
         els.overlay.classList.add('hidden');
         els.sendBtn.disabled = false;
-    }, 500);
+    }, 400);
 }
 
-async function sendOne(to, subject, html, index, total) {
-    updateProgress(index, total);
+// ---------- Toasts & Logs ----------
+function showToast(msg, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icon = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' }[type] || 'ℹ️';
+    toast.innerHTML = `<span style="font-size:1.2em">${icon}</span> <span>${msg}</span>`;
+    els.toastContainer.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
 
-    const formData = new FormData();
-    formData.append('to', to);
-    formData.append('subject', subject);
-    formData.append('html', html); // This is the processed HTML with replacements
-
-    // Inject Credentials
-    if (state.credentials) {
-        formData.append('smtpUser', state.credentials.email);
-        formData.append('smtpPass', state.credentials.pass);
-        if (state.credentials.displayName) formData.append('displayName', state.credentials.displayName);
-        if (state.credentials.replyTo) formData.append('replyTo', state.credentials.replyTo);
+function log(type, msg) {
+    if (els.logTerminal) {
+        const t = new Date().toLocaleTimeString();
+        const div = document.createElement('div');
+        div.className = `log-line ${type}`;
+        div.textContent = `[${t}] ${msg}`;
+        els.logTerminal.appendChild(div);
+        els.logTerminal.scrollTop = els.logTerminal.scrollHeight;
     }
+    const logs = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '[]');
+    logs.push({ type, msg, time: new Date().toLocaleTimeString() });
+    if (logs.length > 200) logs.shift();
+    localStorage.setItem(STORAGE_LOGS, JSON.stringify(logs));
+}
 
-    state.attachments.forEach(file => formData.append('file', file));
+function loadHistory() {
+    const logs = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '[]');
+    if (!els.logTerminal) return;
+    els.logTerminal.innerHTML = '<div class="log-line system">System ready.</div>';
+    logs.forEach(l => {
+        const div = document.createElement('div');
+        div.className = `log-line ${l.type}`;
+        div.textContent = `[${l.time}] ${l.msg}`;
+        els.logTerminal.appendChild(div);
+    });
+    els.logTerminal.scrollTop = els.logTerminal.scrollHeight;
+}
 
-    try {
-        const res = await fetch('/api/send-mail', { method: 'POST', body: formData });
-
-        // Read text first to handle non-JSON errors gracefully
-        const rawText = await res.text();
-
-        let data;
-        try {
-            data = JSON.parse(rawText);
-        } catch (e) {
-            // JSON Parse failed, likely an HTML error page from Vercel
-            console.error('Server returned non-JSON:', rawText);
-            throw new Error(`Server Error (Raw): ${rawText.substring(0, 100)}...`);
-        }
-
-        if (res.ok && data.success) {
-            log('success', `Sent to ${to}`);
-            return true;
-        } else {
-            const errMsg = data.error || data.message || 'Unknown Server Error';
-            log('error', `Failed to send to ${to}: ${errMsg}`);
-            return false;
-        }
-    } catch (err) {
-        log('error', `Error (${to}): ${err.message}`);
-        return false;
-    }
+function setupLogs() {
+    if (!els.clearLogsBtn) return;
+    els.clearLogsBtn.addEventListener('click', () => {
+        els.logTerminal.innerHTML = '<div class="log-line system">Local logs cleared.</div>';
+        localStorage.removeItem(STORAGE_LOGS);
+    });
 }

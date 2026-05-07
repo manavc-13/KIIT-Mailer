@@ -1,15 +1,57 @@
-# IQAC Mailer
+# KIIT Mailer
 
-IQAC Mailer is a lightweight, local web application designed for sending bulk emails efficiently. It provides a user-friendly interface to compose, preview, and send personalized emails to a list of recipients.
+A lightweight, local web-based mailing utility for KIIT University. Compose HTML
+emails (with plain-text fallback), send to a single recipient or in bulk via
+CSV upload or an in-browser editable data grid, and preview exactly how the
+email will look in clients like Gmail — across light/dark themes and
+desktop/mobile viewports.
 
 ## Features
 
-- **Bulk Emailing**: Send emails to multiple recipients simultaneously using a CSV file.
-- **Personalization**: Automatically replace placeholders like `{Name}` and `{Email}` in the email body with data from your CSV file.
-- **Rich Text Editor**: Compose emails using a powerful rich text editor (Quill) or write raw HTML for complete control.
-- **Attachment Support**: Easily attach multiple files to your emails.
-- **Template Management**: Download a sample CSV template to ensure your recipient list is formatted correctly.
-- **System Activity Logs**: View a local history of your mailing activity and system status directly in the dashboard.
-- **Local Settings**: Securely configure your SMTP credentials (email and app password) which are stored locally in your browser.
-- **Preview Mode**: Visualize exactly how your email will look to recipients before sending.
-- **Progress Tracking**: Real-time progress bar and status updates during the bulk sending process.
+- **HTML-First Composer** — primary editor for raw HTML, with a Rich Text mode
+  (Quill) and a secondary Plain-Text editor for the text MIME part.
+- **Single & Bulk Send** —
+  - **Single Recipient**: send to one address with optional custom placeholder
+    fields you define inline.
+  - **Bulk via CSV**: upload a CSV with `Name`, `Email`, and any extra columns.
+  - **Bulk via Manual Entry**: an editable spreadsheet-like grid in the
+    browser with add/remove rows, custom columns (= custom placeholders),
+    and inline validation.
+- **Placeholders** — any column becomes a `{Column}` placeholder usable in
+  Subject, HTML, and Plain Text.
+- **Email-Client-Accurate Preview** — Gmail-style chrome (sender, subject,
+  recipient, date) wrapping a sandboxed iframe of the actual HTML.
+  - **Light / Dark theme** toggle (simulated)
+  - **Desktop / Mobile** viewport toggle (mobile shows a phone frame at 380px)
+  - **Per-recipient preview** when a list is loaded
+- **Attachments** — drag/drop multiple files, total size guard (25 MB).
+- **Activity Log** — local timestamped log of sends and errors.
+- **Local Settings** — SMTP credentials (KIIT email + Google App Password) are
+  stored only in your browser's `localStorage` and sent directly to the local
+  server when sending.
+
+## Quick Start
+
+```bash
+npm install
+npm start
+```
+
+Then open the URL printed in the console (typically `http://localhost:3000`).
+
+1. On first launch, open **Settings** and enter:
+   - your `*@kiit.ac.in` email
+   - the Google App Password (see welcome page for steps)
+   - optional display name and reply-to
+2. Switch to **Compose**, pick **Single Recipient** or **Bulk Send**.
+3. Compose the body in HTML (default), Rich Text, or Plain Text.
+4. Click **👁️ Preview** to see a Gmail-style preview with theme/viewport
+   toggles. Use the recipient selector to preview as any row.
+5. Click **Send Email** / **Send Bulk Emails**.
+
+## Notes
+
+- Credentials never leave your machine other than the SMTP send itself.
+- The HTML body is sent as `html`; the Plain-Text body, when present, is sent
+  as the `text` MIME part for clients that prefer it.
+- Built with Node/Express, Nodemailer, Busboy, PapaParse, and Quill.

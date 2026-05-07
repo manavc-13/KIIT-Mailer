@@ -6,24 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KIIT Mailer - Dashboard</title>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Lato:wght@400;700&family=Merriweather:wght@400;700&family=Montserrat:wght@400;700&family=Oswald:wght@400;700&family=Roboto:wght@400;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
-    <style>
-        .brand-text {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #fff;
-            letter-spacing: -0.5px;
-        }
-
-        .text-accent {
-            color: var(--primary);
-        }
-    </style>
 </head>
 
 <body>
@@ -32,35 +20,27 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="brand">
-                <!-- <img src="images/logo.png" alt="Logo" style="width: 40px; height: auto;"> -->
                 <span class="icon" style="font-size: 1.5rem;">📨</span>
                 <span class="brand-text">KIIT <span class="text-accent">Mailer</span></span>
             </div>
 
             <nav>
                 <button class="nav-btn active" data-tab="compose">
-                    <span class="icon">✉️</span> Bulk Mail
+                    <span class="icon">✉️</span> Compose
                 </button>
-                <!-- <button class="nav-btn" data-tab="sent">
-                    <span class="icon">📤</span> Sent
-                </button> -->
-                <!-- <button class="nav-btn" data-tab="drafts">
-                    <span class="icon">📝</span> Drafts
-                </button> -->
                 <button class="nav-btn" data-tab="settings" id="settingsTabBtn">
                     <span class="icon">⚙️</span> Settings
                 </button>
                 <button class="nav-btn" data-tab="logs">
-                    <span class="icon">📜</span> System Activity
+                    <span class="icon">📜</span> Activity
                 </button>
             </nav>
 
             <div class="user-profile">
-                <!-- User info can be dynamic or static since we removed login/staff ID -->
                 <div class="avatar" id="userAvatar">U</div>
                 <div class="user-info">
                     <span class="name" id="userNameDisplay">User</span>
-                    <a href="index.html" class="logout">Back into Instructions</a>
+                    <a href="index.html" class="logout">Setup Help</a>
                 </div>
             </div>
         </aside>
@@ -72,53 +52,99 @@
                 <!-- COMPOSE TAB -->
                 <div id="compose" class="tab-content active">
                     <header class="tab-header">
-                        <h2>Bulk Compose</h2>
+                        <h2>Compose Email</h2>
                         <div class="header-actions">
-                            <!-- <button id="saveDraftBtn" class="secondary-btn">💾 Save Draft</button> -->
+                            <button id="previewBtn" class="secondary-btn">👁️ Preview</button>
                         </div>
                     </header>
 
                     <div class="form-container">
 
-                        <div class="info-box"
-                            style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1rem; border-radius: 8px; color: #bfdbfe; font-size: 0.9rem;">
-                            ℹ️ Make sure your CSV has at least a <strong>Name</strong> and <strong>Email</strong>
-                            column.
+                        <!-- Send Mode Selector -->
+                        <div class="segmented" id="sendModeSeg">
+                            <button class="seg-btn active" data-mode="single">Single Recipient</button>
+                            <button class="seg-btn" data-mode="bulk">Bulk Send</button>
                         </div>
 
-                        <!-- Bulk Mode Input Only -->
-                        <div class="input-group" id="csv-group">
-                            <label>Recipients CSV</label>
-                            <div class="file-drop-area" id="csvDrop">
-                                <span class="file-msg">Drag & Drop CSV or Click to Upload</span>
-                                <input type="file" id="csvFile" accept=".csv">
+                        <!-- SINGLE RECIPIENT FIELDS -->
+                        <div id="singleFields" class="mode-section">
+                            <div class="input-group">
+                                <label>Recipient Email <span class="req">*</span></label>
+                                <input type="email" id="singleEmail" placeholder="recipient@example.com">
                             </div>
-                            <div class="csv-actions">
-                                <span id="csvStatus" class="status-text">No file selected</span>
-                                <button id="downloadTemplateBtn" class="text-btn">Download Template</button>
+                            <div class="input-group">
+                                <label>Recipient Name (optional, becomes <code>{Name}</code>)</label>
+                                <input type="text" id="singleName" placeholder="e.g. Jane Doe">
+                            </div>
+                            <details class="extra-fields-block">
+                                <summary>Add custom placeholders</summary>
+                                <div id="singleCustomFields" class="custom-fields-list"></div>
+                                <button type="button" id="addSingleFieldBtn" class="text-btn">+ Add Field</button>
+                            </details>
+                        </div>
+
+                        <!-- BULK FIELDS -->
+                        <div id="bulkFields" class="mode-section" style="display:none;">
+                            <div class="segmented inner" id="bulkSourceSeg">
+                                <button class="seg-btn active" data-source="csv">CSV Upload</button>
+                                <button class="seg-btn" data-source="manual">Manual Entry</button>
+                            </div>
+
+                            <!-- CSV -->
+                            <div id="bulkCsv" class="bulk-source">
+                                <div class="info-box">
+                                    ℹ️ CSV must have at least <strong>Name</strong> and <strong>Email</strong>
+                                    columns. Any extra columns become placeholders like <code>{Column}</code>.
+                                </div>
+                                <div class="input-group">
+                                    <label>Recipients CSV</label>
+                                    <div class="file-drop-area" id="csvDrop">
+                                        <span class="file-msg">Drag & Drop CSV or Click to Upload</span>
+                                        <input type="file" id="csvFile" accept=".csv">
+                                    </div>
+                                    <div class="csv-actions">
+                                        <span id="csvStatus" class="status-text">No file selected</span>
+                                        <button id="downloadTemplateBtn" class="text-btn" type="button">Download
+                                            Template</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Manual Grid -->
+                            <div id="bulkManual" class="bulk-source" style="display:none;">
+                                <div class="info-box">
+                                    ℹ️ Build your recipient list directly. Add columns to define custom placeholders.
+                                    A <strong>Name</strong> and <strong>Email</strong> column are required.
+                                </div>
+                                <div class="grid-toolbar">
+                                    <button type="button" id="addRowBtn" class="secondary-btn">+ Row</button>
+                                    <button type="button" id="addColBtn" class="secondary-btn">+ Column</button>
+                                    <button type="button" id="clearGridBtn" class="secondary-btn">Clear</button>
+                                    <span id="gridStatus" class="status-text"></span>
+                                </div>
+                                <div class="grid-wrap">
+                                    <table id="manualGrid" class="data-grid"></table>
+                                </div>
                             </div>
                         </div>
 
+                        <!-- SUBJECT -->
                         <div class="input-group">
-                            <label>Subject</label>
+                            <label>Subject <span class="req">*</span></label>
                             <input type="text" id="subject" placeholder="Enter subject line">
                         </div>
 
+                        <!-- BODY -->
                         <div class="input-group">
                             <label>Message Body</label>
 
                             <div class="editor-controls">
-                                <div class="mode-toggle">
-                                    <label class="switch-label">
-                                        <input type="radio" name="editorMode" value="rich">
-                                        <span class="mode-btn">Rich Text</span>
-                                    </label>
-                                    <label class="switch-label">
-                                        <input type="radio" name="editorMode" value="html" checked>
-                                        <span class="mode-btn">Raw HTML</span>
-                                    </label>
+                                <div class="segmented small" id="editorSeg">
+                                    <button class="seg-btn active" data-editor="html">HTML</button>
+                                    <button class="seg-btn" data-editor="rich">Rich Text</button>
+                                    <button class="seg-btn" data-editor="text">Plain Text</button>
                                 </div>
-                                <button id="previewBtn" class="secondary-btn">👁️ Preview</button>
+                                <div class="placeholder-toolbar" id="placeholderToolbar"></div>
                             </div>
 
                             <div class="rich-editor-container" id="richEditorParams" style="display:none;">
@@ -126,12 +152,25 @@
                             </div>
 
                             <div class="html-editor-container" id="htmlEditorParams">
-                                <textarea id="htmlEditor" placeholder="Paste your HTML here..."></textarea>
+                                <textarea id="htmlEditor"
+                                    placeholder="<p>Hello {Name},</p><p>Your message here...</p>"></textarea>
+                                <div class="editor-hint">
+                                    Tip: Paste a full HTML document or just a fragment — it will be wrapped for email
+                                    clients automatically.
+                                </div>
                             </div>
 
-                            <div class="placeholder-toolbar" id="placeholderToolbar"></div>
+                            <div class="text-editor-container" id="textEditorParams" style="display:none;">
+                                <textarea id="textEditor"
+                                    placeholder="Hello {Name},&#10;&#10;Plain text fallback message..."></textarea>
+                                <div class="editor-hint">
+                                    Plain text only — recipients see exactly this. Choose this mode only when HTML is
+                                    not desired.
+                                </div>
+                            </div>
                         </div>
 
+                        <!-- ATTACHMENTS -->
                         <div class="input-group">
                             <label>Attachments</label>
                             <div class="attachment-area">
@@ -140,7 +179,8 @@
                                         style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
                                         <span>📎</span> Attach Files
                                     </label>
-                                    <button id="clearAttachmentsBtn" class="secondary-btn" style="display: none;">×
+                                    <button id="clearAttachmentsBtn" class="secondary-btn" style="display: none;"
+                                        type="button">×
                                         Clear All</button>
                                     <input type="file" id="attachments" multiple style="display: none;">
                                 </div>
@@ -149,18 +189,15 @@
                         </div>
 
                         <div class="action-bar">
-                            <button id="sendBtn" class="primary-btn">Send Bulk Emails</button>
+                            <button id="sendBtn" class="primary-btn">Send Email</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- SENT MAILS TAB -->
-                <!-- SENT MAILS TAB REMOVED -->
-
                 <!-- LOGS TAB -->
                 <div id="logs" class="tab-content">
                     <header class="tab-header">
-                        <h2>System Activity</h2>
+                        <h2>Activity</h2>
                         <button class="clear-btn" id="clearLogs">Clear Local View</button>
                     </header>
                     <div class="log-terminal" id="logTerminal">
@@ -173,74 +210,110 @@
                     <header class="tab-header">
                         <h2>Settings</h2>
                     </header>
-                    <div class="form-container" style="max-width: 500px;">
+                    <div class="form-container" style="max-width: 560px;">
 
                         <div class="input-group">
-                            <label>KIIT Email Address <span style="color:red">*</span></label>
-                            <input type="email" id="settingsEmail" placeholder="roll_number@kiit.ac.in">
+                            <label>KIIT Email Address <span class="req">*</span></label>
+                            <input type="email" id="settingsEmail" placeholder="rollno@kiit.ac.in">
                         </div>
 
                         <div class="input-group">
-                            <label>App Password <span style="color:red">*</span></label>
+                            <label>App Password <span class="req">*</span></label>
                             <input type="password" id="settingsPass" placeholder="16-character app password">
-                            <small style="color: #666; display: block; margin-top: 4px;">Paste the 16-character password
-                                generated from Google Account.</small>
+                            <small class="hint">Generate from your Google Account → Security → App Passwords.</small>
                         </div>
 
                         <div class="input-group">
                             <label>Display Name (Optional)</label>
-                            <input type="text" id="settingsDisplayName" placeholder="e.g. First Last">
+                            <input type="text" id="settingsDisplayName" placeholder="e.g. Jane Doe / KIIT IQAC">
                         </div>
 
                         <div class="input-group">
-                            <label>Reply-To Email</label>
-                            <input type="email" id="settingsReplyTo" placeholder="info@edgei.org">
+                            <label>Reply-To Email (Optional)</label>
+                            <input type="email" id="settingsReplyTo" placeholder="reply-to@example.com">
                         </div>
 
                         <button id="saveSettingsBtn" class="primary-btn">Save Settings</button>
 
-                        <p style="color: #666; font-size: 0.85rem; margin-top: 1rem;">
-                            🔒 Your credentials are saved locally in your browser and sent directly to the server only
-                            when sending emails. They are not stored permanently on any external server.
+                        <p class="hint" style="margin-top: 1rem;">
+                            🔒 Credentials are stored only in your browser's local storage and sent directly to your
+                            mail
+                            server when sending. They are never persisted on any external server.
                         </p>
                     </div>
                 </div>
+
                 <footer class="app-footer">
-                    &copy; <span id="year"></span> Made by Manav Choudhary.
+                    &copy; <span id="year"></span> KIIT Mailer.
                 </footer>
-            </div> <!-- End content-area -->
+            </div>
         </main>
     </div>
 
     <!-- Mode Switch Warning Modal -->
     <div id="modeWarningModal" class="overlay hidden">
         <div class="progress-card" style="text-align: left; width: 450px;">
-            <h3 style="margin-top:0; color: var(--warning);">⚠️ Warning: Potential Data Loss</h3>
+            <h3 style="margin-top:0; color: var(--warning);">⚠️ Switch editor?</h3>
             <p style="color: #ccc; font-size: 0.95rem; line-height: 1.5;">
-                Switching editor modes may cause formatting loss or reset your content.
-                <br><br>
-                <strong>If you switch, the current content in the active editor will be cleared or overwritten.</strong>
+                Switching editor modes may cause formatting loss. The content of the editor you are leaving will be
+                cleared.
             </p>
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
                 <button id="cancelModeSwitch" class="secondary-btn">Cancel</button>
                 <button id="confirmModeSwitch" class="primary-btn"
-                    style="background: var(--warning); border-color: var(--warning);">Yes, Switch & Clear</button>
+                    style="background: var(--warning); border-color: var(--warning);">Yes, Switch</button>
             </div>
         </div>
     </div>
 
-    <!-- Preview Modal -->
+    <!-- Preview Modal (Gmail-like) -->
     <div id="previewModal" class="overlay hidden">
-        <div class="preview-card"
-            style="width: 800px; max-width: 95vw; background: white; color: black; text-align: left; padding: 0; overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
-            <div class="preview-header"
-                style="padding: 1rem; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f9f9f9;">
-                <h3 style="margin:0; font-size: 1.1rem; color: #333;">Email Preview</h3>
-                <button id="closePreviewBtn"
-                    style="background:none; border:none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+        <div class="preview-card">
+            <div class="preview-toolbar">
+                <div class="preview-tools-left">
+                    <strong>Email Preview</strong>
+                    <select id="previewRecipient" class="mini-select" style="display:none;"></select>
+                </div>
+                <div class="preview-tools-right">
+                    <div class="segmented small" id="previewThemeSeg">
+                        <button class="seg-btn active" data-theme="light">☀️ Light</button>
+                        <button class="seg-btn" data-theme="dark">🌙 Dark</button>
+                    </div>
+                    <div class="segmented small" id="previewViewportSeg">
+                        <button class="seg-btn active" data-viewport="desktop">🖥️ Desktop</button>
+                        <button class="seg-btn" data-viewport="mobile">📱 Mobile</button>
+                    </div>
+                    <button id="closePreviewBtn" class="icon-btn" title="Close">✕</button>
+                </div>
             </div>
-            <div class="preview-body" id="previewFrameContainer" style="flex: 1; overflow: auto; padding: 0;">
-                <iframe id="previewFrame" style="width: 100%; height: 100%; border: none;"></iframe>
+            <div class="preview-stage" id="previewStage">
+                <div class="gmail-frame" id="gmailFrame">
+                    <!-- Gmail-like header -->
+                    <div class="gmail-subject-row">
+                        <h2 id="gmSubject">(no subject)</h2>
+                        <span class="gmail-label">Inbox</span>
+                    </div>
+                    <div class="gmail-meta-row">
+                        <div class="gmail-avatar" id="gmAvatar">K</div>
+                        <div class="gmail-meta">
+                            <div class="gmail-from">
+                                <strong id="gmFromName">Sender</strong>
+                                <span id="gmFromEmail" class="muted">&lt;sender@example.com&gt;</span>
+                            </div>
+                            <div class="gmail-to muted">
+                                to <span id="gmTo">recipient@example.com</span> ▾
+                            </div>
+                        </div>
+                        <div class="gmail-date muted" id="gmDate"></div>
+                    </div>
+                    <div class="gmail-body-wrap">
+                        <iframe id="previewFrame" class="gmail-iframe" sandbox="allow-same-origin"></iframe>
+                    </div>
+                    <div class="gmail-footer-actions">
+                        <span class="gmail-action">↩ Reply</span>
+                        <span class="gmail-action">↪ Forward</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -263,8 +336,6 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="js/app.js"></script>
-    <!-- <script src="js/sent-mails.js"></script> -->
-    <!-- <script src="js/logs.js"></script> -->
 </body>
 
 </html>

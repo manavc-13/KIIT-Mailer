@@ -64,13 +64,17 @@ module.exports = async (req, res) => {
                 });
 
                 const mailOptions = {
-                    from: `"${fields.displayName || 'EDGEI 2026'}" <${smtpUser}>`,
+                    from: `"${fields.displayName || 'KIIT Mailer'}" <${smtpUser}>`,
                     to: fields.to,
                     replyTo: fields.replyTo || undefined,
                     subject: fields.subject,
-                    html: fields.html,
                     attachments: files
                 };
+                if (fields.html) mailOptions.html = fields.html;
+                if (fields.text) mailOptions.text = fields.text;
+                if (!fields.html && !fields.text) {
+                    throw new Error('Email body is empty (no html or text provided)');
+                }
 
                 const info = await transporter.sendMail(mailOptions);
                 logger.info('Email sent successfully. MessageID: %s', info.messageId);
