@@ -115,12 +115,25 @@
                                 <div class="info-box">
                                     ℹ️ Build your recipient list directly. Add columns to define custom placeholders.
                                     A <strong>Name</strong> and <strong>Email</strong> column are required.
+                                    Tip: paste tabular data (Excel/Sheets) directly into any cell — tabs and newlines are handled automatically.
                                 </div>
                                 <div class="grid-toolbar">
                                     <button type="button" id="addRowBtn" class="secondary-btn">+ Row</button>
                                     <button type="button" id="addColBtn" class="secondary-btn">+ Column</button>
+                                    <button type="button" id="deleteSelectedBtn" class="secondary-btn danger-btn" style="display:none;">Delete Selected (<span id="selectedCount">0</span>)</button>
+                                    <button type="button" id="pasteImportBtn" class="secondary-btn">📋 Paste from Excel/TSV</button>
+                                    <button type="button" id="exportGridBtn" class="secondary-btn">⬇ Export CSV</button>
                                     <button type="button" id="clearGridBtn" class="secondary-btn">Clear</button>
                                     <span id="gridStatus" class="status-text"></span>
+                                </div>
+                                <div id="pasteImportArea" class="paste-import" style="display:none;">
+                                    <label>Paste tabular data (TSV / CSV — first row should be headers):</label>
+                                    <textarea id="pasteImportText" placeholder="Name\tEmail\nJohn Doe\tjohn@kiit.ac.in\nJane Roe\tjane@kiit.ac.in"></textarea>
+                                    <div class="paste-import-actions">
+                                        <button type="button" id="pasteImportApply" class="primary-btn small-btn">Import</button>
+                                        <button type="button" id="pasteImportCancel" class="secondary-btn">Cancel</button>
+                                        <label class="inline-check"><input type="checkbox" id="pasteImportAppend"> Append to existing rows</label>
+                                    </div>
                                 </div>
                                 <div class="grid-wrap">
                                     <table id="manualGrid" class="data-grid"></table>
@@ -130,8 +143,22 @@
 
                         <!-- SUBJECT -->
                         <div class="input-group">
-                            <label>Subject <span class="req">*</span></label>
-                            <input type="text" id="subject" placeholder="Enter subject line">
+                            <div class="label-row">
+                                <label>Subject <span class="req">*</span></label>
+                                <span id="subjectCounter" class="counter-text">0 chars</span>
+                            </div>
+                            <input type="text" id="subject" placeholder="Enter subject line" maxlength="300">
+                            <div id="subjectWarn" class="warn-line" style="display:none;"></div>
+                        </div>
+
+                        <!-- PREHEADER -->
+                        <div class="input-group">
+                            <div class="label-row">
+                                <label>Preheader (preview text shown next to subject in inbox)</label>
+                                <span id="preheaderCounter" class="counter-text">0 chars</span>
+                            </div>
+                            <input type="text" id="preheader" placeholder="Optional: a short preview snippet recipients see in their inbox list" maxlength="200">
+                            <small class="hint">Injected as a hidden block at the top of the HTML body. Aim for 40–90 characters.</small>
                         </div>
 
                         <!-- BODY -->
@@ -188,7 +215,47 @@
                             </div>
                         </div>
 
+                        <!-- BULK SEND OPTIONS -->
+                        <div id="bulkOptions" class="bulk-options" style="display:none;">
+                            <h4 class="section-heading">Send Options</h4>
+                            <div class="options-grid">
+                                <div class="input-group">
+                                    <label>Delay between sends (ms)</label>
+                                    <input type="number" id="delayMs" min="0" max="60000" step="100" value="800">
+                                    <small class="hint">Helps stay under Gmail burst limits. 500–1500 ms recommended.</small>
+                                </div>
+                                <div class="input-group">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="dedupToggle" checked>
+                                        <span class="slider"></span>
+                                        <span class="toggle-label">Drop duplicate emails (case-insensitive)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="preflightPanel" class="preflight-panel" style="display:none;">
+                                <div class="preflight-header">
+                                    <strong>Pre-flight Check</strong>
+                                    <button type="button" id="refreshPreflightBtn" class="text-btn">↻ Refresh</button>
+                                </div>
+                                <div id="preflightBody" class="preflight-body"></div>
+                            </div>
+                            <button type="button" id="runPreflightBtn" class="secondary-btn">🔍 Run Pre-flight Check</button>
+                        </div>
+
+                        <!-- RESUME BANNER -->
+                        <div id="resumeBanner" class="resume-banner" style="display:none;">
+                            <div>
+                                <strong>⏸ Unfinished batch detected</strong>
+                                <div class="muted-small" id="resumeMeta"></div>
+                            </div>
+                            <div class="resume-actions">
+                                <button type="button" id="resumeBtn" class="primary-btn small-btn">Resume</button>
+                                <button type="button" id="discardResumeBtn" class="secondary-btn">Discard</button>
+                            </div>
+                        </div>
+
                         <div class="action-bar">
+                            <button id="sendTestBtn" class="secondary-btn big-btn" type="button">✉ Send Test to Me</button>
                             <button id="sendBtn" class="primary-btn">Send Email</button>
                         </div>
                     </div>
@@ -275,9 +342,10 @@
                     <select id="previewRecipient" class="mini-select" style="display:none;"></select>
                 </div>
                 <div class="preview-tools-right">
-                    <div class="segmented small" id="previewThemeSeg">
+                    <div class="segmented small" id="previewThemeSeg"
+                        title="Simulates how the recipient's mobile client may force-darken your email. The email itself is not modified.">
                         <button class="seg-btn active" data-theme="light">☀️ Light</button>
-                        <button class="seg-btn" data-theme="dark">🌙 Dark</button>
+                        <button class="seg-btn" data-theme="dark">🌙 Forced Dark</button>
                     </div>
                     <div class="segmented small" id="previewViewportSeg">
                         <button class="seg-btn active" data-viewport="desktop">🖥️ Desktop</button>
@@ -318,16 +386,38 @@
         </div>
     </div>
 
-    <!-- Progress Overlay -->
+    <!-- Send Console Overlay -->
     <div id="progressOverlay" class="overlay hidden">
-        <div class="progress-card">
-            <h3>Sending Emails...</h3>
+        <div class="send-console">
+            <div class="console-header">
+                <h3 id="consoleTitle">Sending Emails…</h3>
+                <div class="console-controls">
+                    <button type="button" id="pauseBtn" class="secondary-btn">⏸ Pause</button>
+                    <button type="button" id="resumeBtnConsole" class="secondary-btn" style="display:none;">▶ Resume</button>
+                    <button type="button" id="cancelBtn" class="secondary-btn danger-btn">✕ Cancel</button>
+                </div>
+            </div>
             <div class="progress-bar-bg">
                 <div class="progress-bar-fill" id="progressBar"></div>
             </div>
             <div class="progress-stat">
                 <span id="progressText">0 / 0</span>
                 <span id="progressPercent">0%</span>
+            </div>
+            <div class="counts-row">
+                <span class="chip success-chip">✓ <span id="successCount">0</span> sent</span>
+                <span class="chip danger-chip">✕ <span id="failureCount">0</span> failed</span>
+                <span class="chip muted-chip">⏱ <span id="pendingCount">0</span> pending</span>
+            </div>
+            <div class="results-wrap">
+                <table id="resultsTable" class="results-table">
+                    <thead><tr><th>#</th><th>Email</th><th>Status</th><th>Detail</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="console-footer">
+                <button type="button" id="exportResultsBtn" class="secondary-btn" disabled>⬇ Export Results CSV</button>
+                <button type="button" id="closeConsoleBtn" class="primary-btn" style="display:none;">Done</button>
             </div>
         </div>
     </div>

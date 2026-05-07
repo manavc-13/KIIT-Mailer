@@ -5,26 +5,29 @@
 const MAX_SIZE_MB = 25;
 const STORAGE_SETTINGS = 'kiit_mailer_settings';
 const STORAGE_LOGS = 'kiit_mailer_logs';
+const STORAGE_QUEUE = 'kiit_mailer_pending_queue';
 
-// ---------- Default Starter HTML (generic, KIIT-friendly, light+dark safe) ----------
+// Common spam-trigger words (subject) — not exhaustive, just a friendly nudge.
+const SPAM_WORDS = [
+    'free', 'winner', 'won', 'prize', 'urgent', 'cash', 'click here', 'buy now',
+    'limited time', 'act now', 'guarantee', 'risk-free', 'congratulations',
+    'lottery', 'discount', 'offer', '!!', '$$', '100%'
+];
+
+// ---------- Default Starter HTML (generic, KIIT-friendly, light-locked) ----------
+// IMPORTANT: This template intentionally opts OUT of automatic dark-mode color
+// transformation by mail clients. Your colors will appear exactly as designed.
 const DEFAULT_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
 <title>KIIT Mailer</title>
 <style>
+  :root { color-scheme: light only; }
   body { margin:0; padding:0; -webkit-text-size-adjust:100%; }
-  @media (prefers-color-scheme: dark) {
-    .body-bg { background-color:#0f1115 !important; }
-    .card { background-color:#1a1d24 !important; color:#e6e8eb !important; }
-    .muted { color:#a8adb6 !important; }
-    .accent { color:#7dabf8 !important; }
-    .divider { border-top-color:#2a2e36 !important; }
-    .btn { background-color:#2563eb !important; color:#ffffff !important; }
-  }
   @media only screen and (max-width:600px) {
     .card { width:100% !important; padding:24px !important; border-radius:0 !important; }
     .btn { width:100% !important; box-sizing:border-box !important; }
@@ -117,14 +120,55 @@ const els = {
     addColBtn: document.getElementById('addColBtn'),
     clearGridBtn: document.getElementById('clearGridBtn'),
     gridStatus: document.getElementById('gridStatus'),
+    deleteSelectedBtn: document.getElementById('deleteSelectedBtn'),
+    selectedCount: document.getElementById('selectedCount'),
+    pasteImportBtn: document.getElementById('pasteImportBtn'),
+    pasteImportArea: document.getElementById('pasteImportArea'),
+    pasteImportText: document.getElementById('pasteImportText'),
+    pasteImportApply: document.getElementById('pasteImportApply'),
+    pasteImportCancel: document.getElementById('pasteImportCancel'),
+    pasteImportAppend: document.getElementById('pasteImportAppend'),
+    exportGridBtn: document.getElementById('exportGridBtn'),
 
     // Common
     subject: document.getElementById('subject'),
+    subjectCounter: document.getElementById('subjectCounter'),
+    subjectWarn: document.getElementById('subjectWarn'),
+    preheader: document.getElementById('preheader'),
+    preheaderCounter: document.getElementById('preheaderCounter'),
     placeholderToolbar: document.getElementById('placeholderToolbar'),
     attachInput: document.getElementById('attachments'),
     attachList: document.getElementById('attachmentList'),
     clearAttachmentsBtn: document.getElementById('clearAttachmentsBtn'),
     sendBtn: document.getElementById('sendBtn'),
+    sendTestBtn: document.getElementById('sendTestBtn'),
+
+    // Bulk options
+    bulkOptions: document.getElementById('bulkOptions'),
+    delayMs: document.getElementById('delayMs'),
+    dedupToggle: document.getElementById('dedupToggle'),
+    runPreflightBtn: document.getElementById('runPreflightBtn'),
+    refreshPreflightBtn: document.getElementById('refreshPreflightBtn'),
+    preflightPanel: document.getElementById('preflightPanel'),
+    preflightBody: document.getElementById('preflightBody'),
+
+    // Resume
+    resumeBanner: document.getElementById('resumeBanner'),
+    resumeMeta: document.getElementById('resumeMeta'),
+    resumeBtn: document.getElementById('resumeBtn'),
+    discardResumeBtn: document.getElementById('discardResumeBtn'),
+
+    // Send console
+    pauseBtn: document.getElementById('pauseBtn'),
+    resumeBtnConsole: document.getElementById('resumeBtnConsole'),
+    cancelBtn: document.getElementById('cancelBtn'),
+    successCount: document.getElementById('successCount'),
+    failureCount: document.getElementById('failureCount'),
+    pendingCount: document.getElementById('pendingCount'),
+    resultsTable: document.getElementById('resultsTable'),
+    exportResultsBtn: document.getElementById('exportResultsBtn'),
+    closeConsoleBtn: document.getElementById('closeConsoleBtn'),
+    consoleTitle: document.getElementById('consoleTitle'),
 
     // Editor
     editorSeg: document.getElementById('editorSeg'),
@@ -204,8 +248,18 @@ const state = {
 
     // Misc
     isSending: false,
+    isPaused: false,
+    isCancelled: false,
     quill: null,
     credentials: null,
+
+    // Manual grid selection
+    selectedRows: new Set(),
+
+    // Send job
+    sendResults: [],   // [{index, email, status, detail}]
+    sendQueue: [],     // remaining valid recipients (with subject/html/text resolved)
+    sendCursor: 0,
 
     // Preview
     previewTheme: 'light',
@@ -232,10 +286,17 @@ document.addEventListener('DOMContentLoaded', () => {
     setupLogs();
     setupSettings();
     setupPreview();
+    setupSubjectHelpers();
+    setupBulkOptions();
+    setupSendConsole();
+    setupTestSend();
+    checkPendingQueue();
 
     renderManualGrid();
     refreshPlaceholders();
     loadHistory();
+    updateSubjectHelpers();
+    updatePreheaderCounter();
 
     if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
         showToast('Please configure settings first', 'warning');
@@ -313,6 +374,7 @@ function setupSendModeToggle() {
             state.sendMode = btn.dataset.mode;
             els.singleFields.style.display = state.sendMode === 'single' ? 'block' : 'none';
             els.bulkFields.style.display = state.sendMode === 'bulk' ? 'block' : 'none';
+            els.bulkOptions.style.display = state.sendMode === 'bulk' ? 'flex' : 'none';
             els.sendBtn.textContent = state.sendMode === 'single' ? 'Send Email' : 'Send Bulk Emails';
             refreshPlaceholders();
         });
@@ -448,18 +510,152 @@ function setupManualGrid() {
         if (!confirm('Clear all manual entries?')) return;
         state.manualColumns = ['Name', 'Email'];
         state.manualRows = [{ Name: '', Email: '' }];
+        state.selectedRows.clear();
         renderManualGrid();
         refreshPlaceholders();
     });
+
+    // Delete selected (multi-select)
+    els.deleteSelectedBtn.addEventListener('click', () => {
+        const sel = [...state.selectedRows].sort((a, b) => b - a);
+        if (sel.length === 0) return;
+        if (!confirm(`Delete ${sel.length} selected row(s)?`)) return;
+        sel.forEach(i => state.manualRows.splice(i, 1));
+        state.selectedRows.clear();
+        if (state.manualRows.length === 0) {
+            const empty = {}; state.manualColumns.forEach(c => empty[c] = '');
+            state.manualRows.push(empty);
+        }
+        renderManualGrid();
+        showToast(`Deleted ${sel.length} row(s)`, 'success');
+    });
+
+    // Paste-from-Excel modal area
+    els.pasteImportBtn.addEventListener('click', () => {
+        const open = els.pasteImportArea.style.display !== 'none';
+        els.pasteImportArea.style.display = open ? 'none' : 'block';
+        if (!open) setTimeout(() => els.pasteImportText.focus(), 50);
+    });
+    els.pasteImportCancel.addEventListener('click', () => {
+        els.pasteImportArea.style.display = 'none';
+        els.pasteImportText.value = '';
+    });
+    els.pasteImportApply.addEventListener('click', () => {
+        const text = els.pasteImportText.value.trim();
+        if (!text) { showToast('Nothing to import', 'warning'); return; }
+        try {
+            const { columns, rows } = parseTabular(text);
+            if (!rows.length) { showToast('No rows detected', 'warning'); return; }
+            const append = els.pasteImportAppend.checked;
+            if (append) {
+                // Merge: union columns, preserve existing rows
+                columns.forEach(c => { if (!state.manualColumns.includes(c)) state.manualColumns.push(c); });
+                state.manualRows = state.manualRows.filter(r => Object.values(r).some(v => (v || '').toString().trim()));
+                rows.forEach(r => {
+                    const norm = {}; state.manualColumns.forEach(c => norm[c] = r[c] || '');
+                    state.manualRows.push(norm);
+                });
+            } else {
+                state.manualColumns = columns.slice();
+                if (!state.manualColumns.includes('Email')) state.manualColumns.push('Email');
+                if (!state.manualColumns.includes('Name')) state.manualColumns.unshift('Name');
+                state.manualRows = rows.map(r => {
+                    const norm = {}; state.manualColumns.forEach(c => norm[c] = r[c] || '');
+                    return norm;
+                });
+            }
+            state.selectedRows.clear();
+            els.pasteImportArea.style.display = 'none';
+            els.pasteImportText.value = '';
+            renderManualGrid();
+            refreshPlaceholders();
+            showToast(`Imported ${rows.length} row(s)`, 'success');
+        } catch (err) {
+            showToast(`Import failed: ${err.message}`, 'error');
+        }
+    });
+
+    // Export grid as CSV
+    els.exportGridBtn.addEventListener('click', () => {
+        const rows = state.manualRows.filter(r => Object.values(r).some(v => (v || '').toString().trim()));
+        if (rows.length === 0) { showToast('Grid is empty', 'warning'); return; }
+        const csv = toCSV(state.manualColumns, rows);
+        downloadFile(csv, 'kiit_mailer_recipients.csv', 'text/csv');
+        showToast(`Exported ${rows.length} row(s)`, 'success');
+    });
+}
+
+// Tabular paste parser: detects tab-separated or comma-separated.
+function parseTabular(text) {
+    const lines = text.replace(/\r/g, '').split('\n').filter(l => l.length > 0);
+    if (lines.length === 0) return { columns: [], rows: [] };
+    const sep = lines[0].includes('\t') ? '\t' : ',';
+    const splitLine = (line) => {
+        if (sep === '\t') return line.split('\t').map(s => s.trim());
+        // Lightweight CSV split (handles simple quoted fields)
+        const result = []; let cur = ''; let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (inQ) {
+                if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+                else if (ch === '"') { inQ = false; }
+                else cur += ch;
+            } else {
+                if (ch === '"') inQ = true;
+                else if (ch === ',') { result.push(cur.trim()); cur = ''; }
+                else cur += ch;
+            }
+        }
+        result.push(cur.trim());
+        return result;
+    };
+    const headers = splitLine(lines[0]);
+    const rows = lines.slice(1).map(line => {
+        const cells = splitLine(line);
+        const o = {};
+        headers.forEach((h, i) => { o[h] = cells[i] != null ? cells[i] : ''; });
+        return o;
+    });
+    return { columns: headers, rows };
+}
+
+function toCSV(columns, rows) {
+    const esc = v => {
+        const s = String(v == null ? '' : v);
+        if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    };
+    const head = columns.map(esc).join(',');
+    const body = rows.map(r => columns.map(c => esc(r[c])).join(',')).join('\n');
+    return head + '\n' + body + '\n';
+}
+
+function downloadFile(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
 }
 
 function renderManualGrid() {
     const t = els.manualGrid;
     t.innerHTML = '';
 
+    // Prune selectedRows of out-of-range indices
+    state.selectedRows = new Set([...state.selectedRows].filter(i => i < state.manualRows.length));
+
     // Header
     const thead = document.createElement('thead');
     const trh = document.createElement('tr');
+
+    // Master checkbox
+    const thCheck = document.createElement('th');
+    thCheck.className = 'head-check';
+    const allSelected = state.manualRows.length > 0 && state.selectedRows.size === state.manualRows.length;
+    thCheck.innerHTML = `<input type="checkbox" id="masterCheck" ${allSelected ? 'checked' : ''} title="Select all rows">`;
+    trh.appendChild(thCheck);
+
     state.manualColumns.forEach((col, ci) => {
         const th = document.createElement('th');
         const isRequired = col === 'Email';
@@ -481,6 +677,13 @@ function renderManualGrid() {
     const tbody = document.createElement('tbody');
     state.manualRows.forEach((row, ri) => {
         const tr = document.createElement('tr');
+        if (state.selectedRows.has(ri)) tr.classList.add('selected');
+
+        const checkTd = document.createElement('td');
+        checkTd.className = 'row-check';
+        checkTd.innerHTML = `<input type="checkbox" class="row-select" data-ri="${ri}" ${state.selectedRows.has(ri) ? 'checked' : ''}>`;
+        tr.appendChild(checkTd);
+
         state.manualColumns.forEach(col => {
             const td = document.createElement('td');
             const inputType = col === 'Email' ? 'email' : 'text';
@@ -495,6 +698,25 @@ function renderManualGrid() {
     t.appendChild(tbody);
 
     // Listeners
+    const masterCheck = t.querySelector('#masterCheck');
+    if (masterCheck) {
+        masterCheck.addEventListener('change', e => {
+            if (e.target.checked) {
+                state.selectedRows = new Set(state.manualRows.map((_, i) => i));
+            } else {
+                state.selectedRows.clear();
+            }
+            renderManualGrid();
+        });
+    }
+    t.querySelectorAll('.row-select').forEach(cb => {
+        cb.addEventListener('change', e => {
+            const ri = +e.target.dataset.ri;
+            if (e.target.checked) state.selectedRows.add(ri);
+            else state.selectedRows.delete(ri);
+            renderManualGrid();
+        });
+    });
     t.querySelectorAll('input.col-name').forEach(inp => {
         inp.addEventListener('change', e => {
             const ci = +e.target.dataset.ci;
@@ -521,18 +743,51 @@ function renderManualGrid() {
             refreshPlaceholders();
         });
     });
-    t.querySelectorAll('tbody input').forEach(inp => {
+    t.querySelectorAll('tbody input[type="text"], tbody input[type="email"]').forEach(inp => {
         inp.addEventListener('input', e => {
             const ri = +e.target.dataset.ri;
             const col = e.target.dataset.col;
+            if (Number.isNaN(ri) || !col) return;
             state.manualRows[ri][col] = e.target.value;
             updateGridStatus();
+        });
+        // Paste-from-Excel handling: tabs/newlines distribute across grid
+        inp.addEventListener('paste', e => {
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            if (!text) return;
+            if (!/[\t\n]/.test(text)) return; // single-cell paste, leave default
+            e.preventDefault();
+            const startRi = +e.target.dataset.ri;
+            const startCol = e.target.dataset.col;
+            const startCi = state.manualColumns.indexOf(startCol);
+            if (startCi < 0) return;
+            const lines = text.replace(/\r/g, '').replace(/\n+$/, '').split('\n');
+            lines.forEach((line, lineIdx) => {
+                const cells = line.split('\t');
+                const targetRi = startRi + lineIdx;
+                while (state.manualRows.length <= targetRi) {
+                    const empty = {}; state.manualColumns.forEach(c => empty[c] = '');
+                    state.manualRows.push(empty);
+                }
+                cells.forEach((val, cellIdx) => {
+                    const ci = startCi + cellIdx;
+                    if (ci >= state.manualColumns.length) return;
+                    const col = state.manualColumns[ci];
+                    state.manualRows[targetRi][col] = val;
+                });
+            });
+            renderManualGrid();
+            refreshPlaceholders();
+            showToast(`Pasted ${lines.length} row(s)`, 'success');
         });
     });
     t.querySelectorAll('[data-delrow]').forEach(btn => {
         btn.addEventListener('click', e => {
             const ri = +e.currentTarget.dataset.delrow;
             state.manualRows.splice(ri, 1);
+            state.selectedRows.delete(ri);
+            // shift indices in selectedRows
+            state.selectedRows = new Set([...state.selectedRows].map(i => i > ri ? i - 1 : i));
             if (state.manualRows.length === 0) {
                 const empty = {}; state.manualColumns.forEach(c => empty[c] = '');
                 state.manualRows.push(empty);
@@ -547,6 +802,11 @@ function renderManualGrid() {
 function updateGridStatus() {
     const valid = state.manualRows.filter(r => (r.Email || '').trim() !== '').length;
     els.gridStatus.textContent = `${state.manualRows.length} row(s) · ${valid} with email`;
+    const sel = state.selectedRows.size;
+    if (els.deleteSelectedBtn) {
+        els.deleteSelectedBtn.style.display = sel > 0 ? 'inline-block' : 'none';
+        if (els.selectedCount) els.selectedCount.textContent = sel;
+    }
 }
 
 // ---------- Quill / Editors ----------
@@ -866,7 +1126,7 @@ function textToHtml(text) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
     const body = escaped.split(/\n/).map(l => l || '&nbsp;').join('<br>');
-    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="color-scheme" content="light dark"></head>
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light"></head>
 <body style="margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#1f2328; background:#ffffff;">
 <div style="max-width:600px; margin:0 auto;">${body}</div>
 </body></html>`;
@@ -874,17 +1134,18 @@ function textToHtml(text) {
 
 function wrapRichContent(html) {
     if (/<!DOCTYPE/i.test(html)) return html;
+    // Light-locked wrapper — opts out of mail-client dark-mode transformations
+    // so the email appears exactly as the user composed it.
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
 <style>
+  :root { color-scheme: light only; }
   body { margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#1f2328; background:#ffffff; }
-  @media (prefers-color-scheme: dark) {
-    body { background:#0f1115 !important; color:#e6e8eb !important; }
-  }
 </style>
 </head>
 <body>
@@ -895,21 +1156,12 @@ function wrapRichContent(html) {
 
 // ---------- Sending ----------
 function setupSending() {
-    els.sendBtn.addEventListener('click', sendAll);
+    els.sendBtn.addEventListener('click', () => sendAll(false));
 }
 
-async function sendAll() {
-    if (state.isSending) return;
-    if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
-        showToast('Please configure settings first', 'error');
-        els.settingsTabBtn.click();
-        return;
-    }
-
+// Build current message payload (subject/html/text) from editor state.
+function buildMessagePayload() {
     const subject = els.subject.value.trim();
-    if (!subject) { showToast('Please enter a subject', 'warning'); return; }
-
-    // Build payload — only the active editor's content is sent
     let htmlPayload = '';
     let textPayload = '';
     if (state.editorMode === 'html') {
@@ -919,48 +1171,142 @@ async function sendAll() {
     } else {
         textPayload = els.textEditor.value || '';
     }
-
-    if (!htmlPayload.trim() && !textPayload.trim()) {
-        showToast('Email body is empty', 'warning'); return;
+    // Preheader injection (HTML only)
+    const preheader = (els.preheader.value || '').trim();
+    if (preheader && htmlPayload) {
+        htmlPayload = injectPreheader(htmlPayload, preheader);
     }
-
-    const recipients = getRecipients();
-    if (recipients.length === 0) {
-        showToast(state.sendMode === 'single' ? 'Enter recipient email' : 'No recipients to send to', 'warning');
-        return;
-    }
-    // Validate emails
-    const valid = recipients.filter(r => /\S+@\S+\.\S+/.test((r.Email || '').trim()));
-    if (valid.length === 0) {
-        showToast('No valid email addresses found', 'error'); return;
-    }
-
-    const total = valid.length;
-    startProgress(total);
-    let success = 0;
-
-    for (let i = 0; i < total; i++) {
-        const row = valid[i];
-        const email = row.Email.trim();
-        const html = substitute(htmlPayload, row);
-        const text = textPayload ? substitute(textPayload, row) : '';
-        const subj = substitute(subject, row);
-        const ok = await sendOne(email, subj, html, text, i + 1, total);
-        if (ok) success++;
-    }
-
-    endProgress();
-    showToast(`Finished. Sent ${success}/${total}`, success === total ? 'success' : 'warning');
+    return { subject, htmlPayload, textPayload, preheader };
 }
 
-async function sendOne(to, subject, html, text, index, total) {
-    updateProgress(index, total);
+function injectPreheader(html, preheader) {
+    const safe = preheader
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const block = `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:transparent;opacity:0;">${safe}</div>`;
+    if (/<body[^>]*>/i.test(html)) {
+        return html.replace(/<body[^>]*>/i, m => m + block);
+    }
+    return block + html;
+}
 
+// Build the resolved queue (per-recipient) given recipients and payload.
+function buildQueue(recipients, payload) {
+    return recipients.map((row, idx) => ({
+        index: idx + 1,
+        email: (row.Email || '').trim(),
+        subject: substitute(payload.subject, row),
+        html: payload.htmlPayload ? substitute(payload.htmlPayload, row) : '',
+        text: payload.textPayload ? substitute(payload.textPayload, row) : '',
+        row,
+    }));
+}
+
+function dedupeRecipients(list) {
+    const seen = new Set();
+    const out = [];
+    list.forEach(r => {
+        const key = (r.Email || '').trim().toLowerCase();
+        if (!key) return;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(r);
+    });
+    return out;
+}
+
+async function sendAll(isResume = false) {
+    if (state.isSending) return;
+    if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
+        showToast('Please configure settings first', 'error');
+        els.settingsTabBtn.click();
+        return;
+    }
+
+    let queue;
+    if (isResume) {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_QUEUE) || 'null');
+        if (!saved || !saved.queue || !saved.queue.length) {
+            showToast('No saved queue to resume', 'warning');
+            return;
+        }
+        queue = saved.queue;
+        // Reset results table for the resumed run (prior results stay in logs/CSV downloads if user kept them).
+        state.sendResults = [];
+    } else {
+        const payload = buildMessagePayload();
+        if (!payload.subject) { showToast('Please enter a subject', 'warning'); return; }
+        if (!payload.htmlPayload.trim() && !payload.textPayload.trim()) {
+            showToast('Email body is empty', 'warning'); return;
+        }
+
+        let recipients = getRecipients();
+        if (recipients.length === 0) {
+            showToast(state.sendMode === 'single' ? 'Enter recipient email' : 'No recipients to send to', 'warning');
+            return;
+        }
+        // Validate emails
+        recipients = recipients.filter(r => /\S+@\S+\.\S+/.test((r.Email || '').trim()));
+        if (recipients.length === 0) {
+            showToast('No valid email addresses found', 'error'); return;
+        }
+        // Dedup (bulk only)
+        if (state.sendMode === 'bulk' && els.dedupToggle && els.dedupToggle.checked) {
+            const before = recipients.length;
+            recipients = dedupeRecipients(recipients);
+            const dropped = before - recipients.length;
+            if (dropped > 0) log('system', `Deduplication dropped ${dropped} duplicate email(s)`);
+        }
+
+        queue = buildQueue(recipients, payload);
+        state.sendResults = [];
+    }
+
+    state.sendQueue = queue;
+    state.sendCursor = 0;
+    state.isSending = true;
+    state.isPaused = false;
+    state.isCancelled = false;
+
+    openSendConsole(queue.length);
+
+    const delay = state.sendMode === 'bulk' ? Math.max(0, parseInt(els.delayMs.value, 10) || 0) : 0;
+
+    log('system', `Starting batch of ${queue.length} email(s)${isResume ? ' (resumed)' : ''}...`);
+
+    // Persist queue snapshot — used for resume after refresh/crash.
+    persistQueue();
+
+    while (state.sendCursor < state.sendQueue.length) {
+        if (state.isCancelled) break;
+        if (state.isPaused) {
+            await sleep(200);
+            continue;
+        }
+        const item = state.sendQueue[state.sendCursor];
+        appendPendingResult(item);
+        const result = await sendOne(item);
+        finalizeResult(item, result);
+        state.sendCursor++;
+        updateConsoleProgress();
+        persistQueue();
+
+        if (delay > 0 && state.sendCursor < state.sendQueue.length && !state.isCancelled) {
+            // Sleep but allow pause/cancel to interrupt promptly
+            await sleepInterruptible(delay);
+        }
+    }
+
+    finishSendConsole();
+    if (!state.isCancelled) localStorage.removeItem(STORAGE_QUEUE);
+    state.isSending = false;
+}
+
+async function sendOne(item) {
     const fd = new FormData();
-    fd.append('to', to);
-    fd.append('subject', subject);
-    if (html) fd.append('html', html);
-    if (text) fd.append('text', text);
+    fd.append('to', item.email);
+    fd.append('subject', item.subject);
+    if (item.html) fd.append('html', item.html);
+    if (item.text) fd.append('text', item.text);
 
     fd.append('smtpUser', state.credentials.email);
     fd.append('smtpPass', state.credentials.pass);
@@ -976,36 +1322,308 @@ async function sendOne(to, subject, html, text, index, total) {
         try { data = JSON.parse(raw); }
         catch (e) { throw new Error(`Server: ${raw.substring(0, 120)}`); }
         if (res.ok && data.success) {
-            log('success', `Sent to ${to}`);
-            return true;
+            log('success', `Sent to ${item.email}`);
+            return { ok: true, detail: data.messageId || 'OK' };
         } else {
-            log('error', `Failed → ${to}: ${data.error || 'Unknown error'}`);
-            return false;
+            const err = data.error || 'Unknown error';
+            log('error', `Failed → ${item.email}: ${err}`);
+            return { ok: false, detail: err };
         }
     } catch (err) {
-        log('error', `Error → ${to}: ${err.message}`);
-        return false;
+        log('error', `Error → ${item.email}: ${err.message}`);
+        return { ok: false, detail: err.message };
     }
 }
 
-function startProgress(total) {
-    state.isSending = true;
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function sleepInterruptible(ms) {
+    const step = 100;
+    let elapsed = 0;
+    while (elapsed < ms) {
+        if (state.isCancelled) return;
+        await sleep(Math.min(step, ms - elapsed));
+        elapsed += step;
+        if (state.isPaused) {
+            // Keep waiting in pause — but don't accumulate the delay
+            while (state.isPaused && !state.isCancelled) await sleep(200);
+        }
+    }
+}
+
+function persistQueue() {
+    if (!state.isSending && state.sendQueue.length === 0) return;
+    const remaining = state.sendQueue.slice(state.sendCursor);
+    if (remaining.length === 0) return;
+    const snapshot = {
+        savedAt: new Date().toISOString(),
+        queue: remaining.map(q => ({
+            index: q.index, email: q.email, subject: q.subject, html: q.html, text: q.text,
+        })),
+        results: state.sendResults,
+    };
+    localStorage.setItem(STORAGE_QUEUE, JSON.stringify(snapshot));
+}
+
+// ---------- Send Console UI ----------
+function setupSendConsole() {
+    els.pauseBtn.addEventListener('click', () => {
+        state.isPaused = true;
+        els.pauseBtn.style.display = 'none';
+        els.resumeBtnConsole.style.display = 'inline-block';
+        els.consoleTitle.textContent = 'Paused';
+    });
+    els.resumeBtnConsole.addEventListener('click', () => {
+        state.isPaused = false;
+        els.pauseBtn.style.display = 'inline-block';
+        els.resumeBtnConsole.style.display = 'none';
+        els.consoleTitle.textContent = 'Sending Emails…';
+    });
+    els.cancelBtn.addEventListener('click', () => {
+        if (!confirm('Cancel sending? Remaining recipients will be skipped (queue saved for resume).')) return;
+        state.isCancelled = true;
+        state.isPaused = false;
+    });
+    els.exportResultsBtn.addEventListener('click', exportResultsCSV);
+    els.closeConsoleBtn.addEventListener('click', () => {
+        els.overlay.classList.add('hidden');
+    });
+}
+
+function openSendConsole(total) {
+    els.resultsTable.querySelector('tbody').innerHTML = '';
+    els.successCount.textContent = '0';
+    els.failureCount.textContent = '0';
+    els.pendingCount.textContent = total;
+    els.progressBar.style.width = '0%';
+    els.progressText.textContent = `0 / ${total}`;
+    els.progressPercent.textContent = '0%';
+    els.consoleTitle.textContent = 'Sending Emails…';
+    els.pauseBtn.style.display = 'inline-block';
+    els.pauseBtn.disabled = false;
+    els.resumeBtnConsole.style.display = 'none';
+    els.cancelBtn.disabled = false;
+    els.exportResultsBtn.disabled = true;
+    els.closeConsoleBtn.style.display = 'none';
     els.overlay.classList.remove('hidden');
     els.sendBtn.disabled = true;
-    log('system', `Starting batch of ${total} email(s)...`);
 }
-function updateProgress(current, total) {
-    const pct = Math.round((current / total) * 100);
+
+function appendPendingResult(item) {
+    const tbody = els.resultsTable.querySelector('tbody');
+    const tr = document.createElement('tr');
+    tr.className = 'pending';
+    tr.dataset.idx = item.index;
+    tr.innerHTML = `<td>${item.index}</td><td>${escapeAttr(item.email)}</td><td class="status-cell">⏳ Sending…</td><td>—</td>`;
+    tbody.appendChild(tr);
+    tr.scrollIntoView({ block: 'nearest' });
+}
+
+function finalizeResult(item, result) {
+    state.sendResults.push({ index: item.index, email: item.email, ok: result.ok, detail: result.detail });
+    const tbody = els.resultsTable.querySelector('tbody');
+    const tr = tbody.querySelector(`tr[data-idx="${item.index}"]`);
+    if (tr) {
+        tr.classList.remove('pending');
+        tr.classList.add(result.ok ? 'success' : 'failure');
+        tr.children[2].textContent = result.ok ? '✓ Sent' : '✕ Failed';
+        tr.children[3].textContent = result.detail || '';
+    }
+}
+
+function updateConsoleProgress() {
+    const total = state.sendQueue.length;
+    const done = state.sendCursor;
+    const pct = total ? Math.round((done / total) * 100) : 0;
     els.progressBar.style.width = `${pct}%`;
-    els.progressText.textContent = `${current} / ${total}`;
+    els.progressText.textContent = `${done} / ${total}`;
     els.progressPercent.textContent = `${pct}%`;
+    const ok = state.sendResults.filter(r => r.ok).length;
+    const fail = state.sendResults.filter(r => !r.ok).length;
+    els.successCount.textContent = ok;
+    els.failureCount.textContent = fail;
+    els.pendingCount.textContent = Math.max(0, total - done);
 }
-function endProgress() {
-    state.isSending = false;
-    setTimeout(() => {
-        els.overlay.classList.add('hidden');
-        els.sendBtn.disabled = false;
-    }, 400);
+
+function finishSendConsole() {
+    const total = state.sendQueue.length;
+    const ok = state.sendResults.filter(r => r.ok).length;
+    const fail = state.sendResults.filter(r => !r.ok).length;
+    els.consoleTitle.textContent = state.isCancelled
+        ? `Cancelled — ${ok} sent, ${fail} failed, ${total - state.sendCursor} skipped`
+        : `Done — ${ok} sent, ${fail} failed`;
+    els.pauseBtn.style.display = 'none';
+    els.resumeBtnConsole.style.display = 'none';
+    els.cancelBtn.disabled = true;
+    els.exportResultsBtn.disabled = state.sendResults.length === 0;
+    els.closeConsoleBtn.style.display = 'inline-block';
+    els.sendBtn.disabled = false;
+    if (!state.isCancelled) {
+        showToast(`Finished. Sent ${ok}/${total}`, ok === total ? 'success' : 'warning');
+    } else {
+        showToast(`Cancelled. ${ok} sent, ${total - state.sendCursor} skipped (queue saved)`, 'warning');
+        checkPendingQueue();
+    }
+}
+
+function exportResultsCSV() {
+    if (state.sendResults.length === 0) return;
+    const cols = ['Index', 'Email', 'Status', 'Detail'];
+    const rows = state.sendResults.map(r => ({
+        Index: r.index, Email: r.email, Status: r.ok ? 'Sent' : 'Failed', Detail: r.detail || ''
+    }));
+    downloadFile(toCSV(cols, rows), `kiit_mailer_results_${Date.now()}.csv`, 'text/csv');
+}
+
+// ---------- Test Send (to self) ----------
+function setupTestSend() {
+    els.sendTestBtn.addEventListener('click', sendTestToSelf);
+}
+
+async function sendTestToSelf() {
+    if (state.isSending) return;
+    if (!state.credentials || !state.credentials.email || !state.credentials.pass) {
+        showToast('Please configure settings first', 'error');
+        els.settingsTabBtn.click();
+        return;
+    }
+    const payload = buildMessagePayload();
+    if (!payload.subject) { showToast('Please enter a subject', 'warning'); return; }
+    if (!payload.htmlPayload.trim() && !payload.textPayload.trim()) {
+        showToast('Email body is empty', 'warning'); return;
+    }
+
+    // Use first row's data (or fake data) so placeholders resolve nicely.
+    const recips = getRecipients().filter(r => Object.values(r).some(v => (v || '').toString().trim()));
+    let row = recips[0];
+    if (!row || !row.Email) {
+        row = { Name: 'Test User', Email: state.credentials.email };
+        currentHeaders().forEach(h => { if (!(h in row)) row[h] = `[${h}]`; });
+    }
+    // Force the To address to the user's own KIIT address
+    row = { ...row, Email: state.credentials.email };
+
+    const item = {
+        index: 0,
+        email: state.credentials.email,
+        subject: '[TEST] ' + substitute(payload.subject, row),
+        html: payload.htmlPayload ? substitute(payload.htmlPayload, row) : '',
+        text: payload.textPayload ? substitute(payload.textPayload, row) : '',
+    };
+
+    els.sendTestBtn.disabled = true;
+    showToast('Sending test to your inbox…', 'info');
+    log('system', `Sending TEST to ${item.email}`);
+    const result = await sendOne(item);
+    els.sendTestBtn.disabled = false;
+    if (result.ok) showToast('Test sent — check your inbox', 'success');
+    else showToast(`Test failed: ${result.detail}`, 'error');
+}
+
+// ---------- Subject helpers ----------
+function setupSubjectHelpers() {
+    els.subject.addEventListener('input', updateSubjectHelpers);
+    els.preheader.addEventListener('input', updatePreheaderCounter);
+}
+
+function updateSubjectHelpers() {
+    const v = els.subject.value || '';
+    const len = v.length;
+    els.subjectCounter.textContent = `${len} chars`;
+    els.subjectCounter.classList.toggle('warn', len > 60 && len <= 78);
+    els.subjectCounter.classList.toggle('danger', len > 78);
+
+    // Spam keyword detection (case-insensitive, whole-word-ish)
+    const lower = v.toLowerCase();
+    const hits = SPAM_WORDS.filter(w => lower.includes(w.toLowerCase()));
+    if (hits.length > 0) {
+        els.subjectWarn.style.display = 'block';
+        els.subjectWarn.innerHTML = `⚠️ Possible spam-trigger word(s): ${hits.map(h => `<code>${escapeAttr(h)}</code>`).join(', ')}`;
+    } else {
+        els.subjectWarn.style.display = 'none';
+    }
+}
+
+function updatePreheaderCounter() {
+    const v = els.preheader.value || '';
+    els.preheaderCounter.textContent = `${v.length} chars`;
+    els.preheaderCounter.classList.toggle('warn', v.length > 0 && (v.length < 30 || v.length > 110));
+}
+
+// ---------- Bulk Options & Pre-flight ----------
+function setupBulkOptions() {
+    els.runPreflightBtn.addEventListener('click', runPreflight);
+    els.refreshPreflightBtn.addEventListener('click', runPreflight);
+}
+
+function runPreflight() {
+    const recipients = getRecipients();
+    const total = recipients.length;
+    const emailsRaw = recipients.map(r => (r.Email || '').trim()).filter(Boolean);
+    const emailsLower = emailsRaw.map(e => e.toLowerCase());
+    const unique = new Set(emailsLower);
+    const invalid = emailsRaw.filter(e => !/^\S+@\S+\.\S+$/.test(e));
+    const dupCount = emailsLower.length - unique.size;
+
+    // Duplicate addresses (preserve first occurrence)
+    const seen = new Set();
+    const dupes = [];
+    emailsLower.forEach(e => { if (seen.has(e)) dupes.push(e); else seen.add(e); });
+
+    // Detect missing placeholders in body
+    const payload = buildMessagePayload();
+    const bodyText = (payload.subject || '') + '\n' + (payload.htmlPayload || '') + '\n' + (payload.textPayload || '');
+    const tokensInBody = new Set();
+    String(bodyText).replace(/\{([^{}]+)\}/g, (_m, k) => { tokensInBody.add(k.trim()); return _m; });
+    const headers = currentHeaders();
+    const missing = [...tokensInBody].filter(t => !headers.includes(t));
+
+    const stats = [
+        { label: 'Total recipients', value: total, kind: total > 0 ? 'ok' : 'warn' },
+        { label: 'Unique emails', value: unique.size, kind: 'ok' },
+        { label: 'Invalid emails', value: invalid.length, kind: invalid.length ? 'danger' : 'ok' },
+        { label: 'Duplicate emails', value: dupCount, kind: dupCount ? 'warn' : 'ok' },
+        { label: 'Missing placeholders', value: missing.length, kind: missing.length ? 'danger' : 'ok' },
+    ];
+
+    let html = stats.map(s => `
+        <div class="preflight-stat ${s.kind}">
+            <span class="label">${s.label}</span>
+            <span class="value">${s.value}</span>
+        </div>
+    `).join('');
+
+    if (invalid.length > 0) {
+        html += `<div class="preflight-list"><strong>Invalid:</strong> ${invalid.slice(0, 10).map(e => `<span class="tag">${escapeAttr(e)}</span>`).join('')}${invalid.length > 10 ? ` …+${invalid.length - 10} more` : ''}</div>`;
+    }
+    if (dupes.length > 0) {
+        const uniqueDupes = [...new Set(dupes)];
+        html += `<div class="preflight-list"><strong>Duplicates:</strong> ${uniqueDupes.slice(0, 10).map(e => `<span class="tag warn">${escapeAttr(e)}</span>`).join('')}${uniqueDupes.length > 10 ? ` …+${uniqueDupes.length - 10} more` : ''}</div>`;
+    }
+    if (missing.length > 0) {
+        html += `<div class="preflight-list"><strong>Body uses placeholders not in columns:</strong> ${missing.map(m => `<span class="tag">{${escapeAttr(m)}}</span>`).join('')}</div>`;
+    }
+
+    els.preflightBody.innerHTML = html;
+    els.preflightPanel.style.display = 'block';
+}
+
+// ---------- Resume Queue ----------
+function checkPendingQueue() {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_QUEUE) || 'null');
+    if (!saved || !saved.queue || saved.queue.length === 0) {
+        els.resumeBanner.style.display = 'none';
+        return;
+    }
+    const when = saved.savedAt ? new Date(saved.savedAt).toLocaleString() : 'unknown';
+    els.resumeMeta.textContent = `${saved.queue.length} unsent recipient(s) from ${when}`;
+    els.resumeBanner.style.display = 'flex';
+    els.resumeBtn.onclick = () => sendAll(true);
+    els.discardResumeBtn.onclick = () => {
+        if (!confirm('Discard the saved unfinished batch?')) return;
+        localStorage.removeItem(STORAGE_QUEUE);
+        els.resumeBanner.style.display = 'none';
+        showToast('Saved queue discarded', 'success');
+    };
 }
 
 // ---------- Toasts & Logs ----------
