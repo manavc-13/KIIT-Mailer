@@ -69,8 +69,9 @@
                         <!-- SINGLE RECIPIENT FIELDS -->
                         <div id="singleFields" class="mode-section">
                             <div class="input-group">
-                                <label>Recipient Email <span class="req">*</span></label>
-                                <input type="email" id="singleEmail" placeholder="recipient@example.com">
+                                <label>To Email(s) <span class="req">*</span></label>
+                                <input type="text" id="singleEmail" placeholder="recipient@example.com, another@example.com">
+                                <small class="hint">Separate multiple To addresses with commas, semicolons, spaces, or new lines.</small>
                             </div>
                             <div class="input-group">
                                 <label>Recipient Name (optional, becomes <code>{Name}</code>)</label>
@@ -138,6 +139,18 @@
                                 <div class="grid-wrap">
                                     <table id="manualGrid" class="data-grid"></table>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- COPY RECIPIENTS -->
+                        <div class="options-grid">
+                            <div class="input-group">
+                                <label>CC (optional)</label>
+                                <input type="text" id="ccEmail" placeholder="cc@example.com, another@example.com">
+                            </div>
+                            <div class="input-group">
+                                <label>BCC (optional)</label>
+                                <input type="text" id="bccEmail" placeholder="bcc@example.com, another@example.com">
                             </div>
                         </div>
 

@@ -66,6 +66,8 @@ module.exports = async (req, res) => {
                 const mailOptions = {
                     from: `"${fields.displayName || 'KIIT Mailer'}" <${smtpUser}>`,
                     to: fields.to,
+                    cc: fields.cc || undefined,
+                    bcc: fields.bcc || undefined,
                     replyTo: fields.replyTo || undefined,
                     subject: fields.subject,
                     attachments: files

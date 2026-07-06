@@ -103,6 +103,8 @@ const els = {
     singleName: document.getElementById('singleName'),
     singleCustomFields: document.getElementById('singleCustomFields'),
     addSingleFieldBtn: document.getElementById('addSingleFieldBtn'),
+    ccEmail: document.getElementById('ccEmail'),
+    bccEmail: document.getElementById('bccEmail'),
 
     // Bulk Source
     bulkSourceSeg: document.getElementById('bulkSourceSeg'),
@@ -1005,12 +1007,32 @@ function setupPreview() {
 
 function getRecipients() {
     if (state.sendMode === 'single') {
-        const row = { Name: els.singleName.value || '', Email: els.singleEmail.value || '' };
+        const row = { Name: els.singleName.value || '', Email: normalizeEmailList(els.singleEmail.value) };
         state.singleExtras.forEach(f => { if (f.key) row[f.key] = f.value; });
         return [row];
     }
     if (state.bulkSource === 'csv') return state.csvData || [];
     return state.manualRows.filter(r => (r.Email || '').trim() !== '');
+}
+
+function parseEmailList(value) {
+    return String(value || '')
+        .split(/[\s,;]+/)
+        .map(v => v.trim())
+        .filter(Boolean);
+}
+
+function normalizeEmailList(value) {
+    return parseEmailList(value).join(', ');
+}
+
+function invalidEmails(value) {
+    return parseEmailList(value).filter(email => !/^\S+@\S+\.\S+$/.test(email));
+}
+
+function hasValidEmailList(value) {
+    const emails = parseEmailList(value);
+    return emails.length > 0 && invalidEmails(value).length === 0;
 }
 
 function openPreview() {
@@ -1162,6 +1184,8 @@ function setupSending() {
 // Build current message payload (subject/html/text) from editor state.
 function buildMessagePayload() {
     const subject = els.subject.value.trim();
+    const cc = normalizeEmailList(els.ccEmail.value);
+    const bcc = normalizeEmailList(els.bccEmail.value);
     let htmlPayload = '';
     let textPayload = '';
     if (state.editorMode === 'html') {
@@ -1176,7 +1200,44 @@ function buildMessagePayload() {
     if (preheader && htmlPayload) {
         htmlPayload = injectPreheader(htmlPayload, preheader);
     }
-    return { subject, htmlPayload, textPayload, preheader };
+    // Lock outgoing HTML to light mode so mail clients (Gmail/Outlook) cannot
+    // re-theme or re-color the email. Applied unconditionally for ALL outgoing
+    // HTML, regardless of editor mode.
+    if (htmlPayload) {
+        htmlPayload = lockLightMode(htmlPayload);
+    }
+    return { subject, htmlPayload, textPayload, preheader, cc, bcc };
+}
+
+// Ensure outgoing HTML opts out of mail-client dark-mode transformations.
+// Idempotent: safe to call on HTML that already declares color-scheme.
+function lockLightMode(html) {
+    const lockMetas = [
+        '<meta name="color-scheme" content="light only">',
+        '<meta name="supported-color-schemes" content="light">',
+    ];
+    const lockStyle = '<style>:root{color-scheme:light only;supported-color-schemes:light}body{color-scheme:light only}</style>';
+
+    const hasColorScheme = /<meta[^>]+name=["']color-scheme["']/i.test(html);
+    const hasSupported = /<meta[^>]+name=["']supported-color-schemes["']/i.test(html);
+    const hasLockStyle = /color-scheme\s*:\s*light\s*only/i.test(html);
+
+    const inject =
+        (hasColorScheme ? '' : lockMetas[0]) +
+        (hasSupported ? '' : lockMetas[1]) +
+        (hasLockStyle ? '' : lockStyle);
+
+    if (!inject) return html;
+
+    if (/<head[^>]*>/i.test(html)) {
+        return html.replace(/<head[^>]*>/i, m => m + inject);
+    }
+    if (/<html[^>]*>/i.test(html)) {
+        return html.replace(/<html[^>]*>/i, m => m + '<head>' + inject + '</head>');
+    }
+    // Fragment with no <html>/<head>: wrap it in a minimal document so the
+    // meta tags actually take effect at the client.
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">${inject}</head><body>${html}</body></html>`;
 }
 
 function injectPreheader(html, preheader) {
@@ -1194,6 +1255,8 @@ function buildQueue(recipients, payload) {
     return recipients.map((row, idx) => ({
         index: idx + 1,
         email: (row.Email || '').trim(),
+        cc: payload.cc,
+        bcc: payload.bcc,
         subject: substitute(payload.subject, row),
         html: payload.htmlPayload ? substitute(payload.htmlPayload, row) : '',
         text: payload.textPayload ? substitute(payload.textPayload, row) : '',
@@ -1238,6 +1301,13 @@ async function sendAll(isResume = false) {
         if (!payload.htmlPayload.trim() && !payload.textPayload.trim()) {
             showToast('Email body is empty', 'warning'); return;
         }
+        const invalidCc = invalidEmails(payload.cc);
+        const invalidBcc = invalidEmails(payload.bcc);
+        if (invalidCc.length || invalidBcc.length) {
+            const bad = [...invalidCc, ...invalidBcc].join(', ');
+            showToast(`Invalid CC/BCC address: ${bad}`, 'error');
+            return;
+        }
 
         let recipients = getRecipients();
         if (recipients.length === 0) {
@@ -1245,7 +1315,7 @@ async function sendAll(isResume = false) {
             return;
         }
         // Validate emails
-        recipients = recipients.filter(r => /\S+@\S+\.\S+/.test((r.Email || '').trim()));
+        recipients = recipients.filter(r => hasValidEmailList(r.Email));
         if (recipients.length === 0) {
             showToast('No valid email addresses found', 'error'); return;
         }
@@ -1304,6 +1374,8 @@ async function sendAll(isResume = false) {
 async function sendOne(item) {
     const fd = new FormData();
     fd.append('to', item.email);
+    if (item.cc) fd.append('cc', item.cc);
+    if (item.bcc) fd.append('bcc', item.bcc);
     fd.append('subject', item.subject);
     if (item.html) fd.append('html', item.html);
     if (item.text) fd.append('text', item.text);
@@ -1357,7 +1429,7 @@ function persistQueue() {
     const snapshot = {
         savedAt: new Date().toISOString(),
         queue: remaining.map(q => ({
-            index: q.index, email: q.email, subject: q.subject, html: q.html, text: q.text,
+            index: q.index, email: q.email, cc: q.cc || '', bcc: q.bcc || '', subject: q.subject, html: q.html, text: q.text,
         })),
         results: state.sendResults,
     };
@@ -1505,6 +1577,8 @@ async function sendTestToSelf() {
     const item = {
         index: 0,
         email: state.credentials.email,
+        cc: '',
+        bcc: '',
         subject: '[TEST] ' + substitute(payload.subject, row),
         html: payload.htmlPayload ? substitute(payload.htmlPayload, row) : '',
         text: payload.textPayload ? substitute(payload.textPayload, row) : '',
@@ -1558,10 +1632,13 @@ function setupBulkOptions() {
 function runPreflight() {
     const recipients = getRecipients();
     const total = recipients.length;
-    const emailsRaw = recipients.map(r => (r.Email || '').trim()).filter(Boolean);
+    const emailsRaw = recipients.flatMap(r => parseEmailList(r.Email));
     const emailsLower = emailsRaw.map(e => e.toLowerCase());
     const unique = new Set(emailsLower);
     const invalid = emailsRaw.filter(e => !/^\S+@\S+\.\S+$/.test(e));
+    const ccRaw = parseEmailList(els.ccEmail.value);
+    const bccRaw = parseEmailList(els.bccEmail.value);
+    const invalidCcBcc = [...ccRaw, ...bccRaw].filter(e => !/^\S+@\S+\.\S+$/.test(e));
     const dupCount = emailsLower.length - unique.size;
 
     // Duplicate addresses (preserve first occurrence)
@@ -1581,6 +1658,7 @@ function runPreflight() {
         { label: 'Total recipients', value: total, kind: total > 0 ? 'ok' : 'warn' },
         { label: 'Unique emails', value: unique.size, kind: 'ok' },
         { label: 'Invalid emails', value: invalid.length, kind: invalid.length ? 'danger' : 'ok' },
+        { label: 'Invalid CC/BCC', value: invalidCcBcc.length, kind: invalidCcBcc.length ? 'danger' : 'ok' },
         { label: 'Duplicate emails', value: dupCount, kind: dupCount ? 'warn' : 'ok' },
         { label: 'Missing placeholders', value: missing.length, kind: missing.length ? 'danger' : 'ok' },
     ];
@@ -1594,6 +1672,9 @@ function runPreflight() {
 
     if (invalid.length > 0) {
         html += `<div class="preflight-list"><strong>Invalid:</strong> ${invalid.slice(0, 10).map(e => `<span class="tag">${escapeAttr(e)}</span>`).join('')}${invalid.length > 10 ? ` …+${invalid.length - 10} more` : ''}</div>`;
+    }
+    if (invalidCcBcc.length > 0) {
+        html += `<div class="preflight-list"><strong>Invalid CC/BCC:</strong> ${invalidCcBcc.slice(0, 10).map(e => `<span class="tag">${escapeAttr(e)}</span>`).join('')}${invalidCcBcc.length > 10 ? ` …+${invalidCcBcc.length - 10} more` : ''}</div>`;
     }
     if (dupes.length > 0) {
         const uniqueDupes = [...new Set(dupes)];
