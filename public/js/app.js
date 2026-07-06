@@ -1373,9 +1373,11 @@ async function sendAll(isResume = false) {
 
 async function sendOne(item) {
     const fd = new FormData();
+    const cc = Object.prototype.hasOwnProperty.call(item, 'cc') ? item.cc : normalizeEmailList(els.ccEmail.value);
+    const bcc = Object.prototype.hasOwnProperty.call(item, 'bcc') ? item.bcc : normalizeEmailList(els.bccEmail.value);
     fd.append('to', item.email);
-    if (item.cc) fd.append('cc', item.cc);
-    if (item.bcc) fd.append('bcc', item.bcc);
+    if (cc) fd.append('cc', cc);
+    if (bcc) fd.append('bcc', bcc);
     fd.append('subject', item.subject);
     if (item.html) fd.append('html', item.html);
     if (item.text) fd.append('text', item.text);
