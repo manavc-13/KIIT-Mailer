@@ -8,20 +8,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0a0a0a;
-            --card-bg: #161616;
-            --text: #ffffff;
-            --accent: #3b82f6;
-            --text-muted: #a1a1aa;
+            --bg: #f6f7f9;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --accent: #0b5394;
+            --accent-soft: #e8f0fa;
         }
+
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
-            padding: 0;
+            padding: 24px;
             background-color: var(--bg);
             color: var(--text);
             font-family: 'Inter', sans-serif;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -33,18 +37,15 @@
             border-radius: 16px;
             width: 100%;
             max-width: 600px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            border: 1px solid #333;
+            box-shadow: 0 4px 16px rgba(16, 24, 40, .08);
+            border: 1px solid var(--border);
         }
 
         h1 {
             margin-top: 0;
             font-size: 1.8rem;
-            background: linear-gradient(90deg, #fff, #aaa);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 1.5rem;
+            color: var(--text);
+            margin-bottom: 0.5rem;
             text-align: center;
         }
 
@@ -65,7 +66,7 @@
             width: 30px;
             height: 30px;
             border-radius: 50%;
-            background: #333;
+            background: var(--accent-soft);
             color: var(--accent);
             display: flex;
             align-items: center;
@@ -82,7 +83,7 @@
         .step-content h3 {
             margin: 0 0 0.5rem 0;
             font-size: 1rem;
-            color: #fff;
+            color: var(--text);
         }
 
         .step-content p {
@@ -115,18 +116,19 @@
             text-align: center;
             text-decoration: none;
             margin-top: 2rem;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s, background-color .2s;
         }
 
         .cta-btn:hover {
-            opacity: 0.9;
+            background-color: #0a4680;
+            text-decoration: none;
         }
 
         .footer {
             text-align: center;
             margin-top: 2rem;
             font-size: 0.8rem;
-            color: #555;
+            color: #9ca3af;
         }
     </style>
 </head>
@@ -137,8 +139,9 @@
         <h1>Welcome to KIIT Mailer</h1>
 
         <p style="color: var(--text-muted); text-align:center; margin: -0.5rem 0 1.75rem 0; font-size: 0.95rem; line-height:1.5;">
-            A general-purpose mailing utility for KIIT University — compose HTML emails,
-            send single or in bulk (CSV or manual entry), and preview exactly how recipients will see them.
+            A mailing utility for KIIT University — compose HTML emails, send single or in
+            bulk (CSV or manual entry) with per-recipient CC/BCC, and preview exactly how
+            recipients will see them.
         </p>
 
         <div class="step-list">
@@ -169,7 +172,7 @@
                     <h3>Save in Settings</h3>
                     <p>
                         Copy the 16-character password and paste it into the <strong>Settings</strong>
-                        tab on the next screen. Credentials stay in your browser only.
+                        drawer on the next screen. Credentials stay in your browser only.
                     </p>
                 </div>
             </div>

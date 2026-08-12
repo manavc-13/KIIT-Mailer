@@ -1,102 +1,110 @@
-const nodemailer = require('nodemailer');
-const Busboy = require('busboy');
+// POST /api/send-mail
+//
+// Rewritten from multipart/busboy (one HTTP request PER recipient, attachments
+// re-uploaded every time) to a small JSON batch endpoint:
+//   - Accepts up to `MAX_BATCH` fully-resolved messages per request, sharing
+//     ONE pooled SMTP connection instead of opening a fresh one per email.
+//   - Attachments are passed as lightweight references (Blob URL / local temp
+//     id / inline base64 — see lib/attachments.js) and resolved into buffers
+//     ONCE per request, then reused for every message in the batch. This is
+//     what fixes the "payload error under 15 MB" bug: attachment bytes no
+//     longer ride inside this request at all (except the small 'inline'
+//     fallback, which is capped to fit).
+//   - Errors are classified into plain English (lib/mailer.js classifyError)
+//     instead of leaking raw SMTP responses.
 const logger = require('../lib/logger');
-// const db = require('../lib/storage');
+const { createTransporter, classifyError, encodedSize, GMAIL_MAX_MESSAGE_BYTES } = require('../lib/mailer');
+const { resolveAttachments } = require('../lib/attachments');
 
-// Vercel config to disable default body parsing for this route
-// This allows busboy to consume the stream directly.
-module.exports.config = {
-    api: {
-        bodyParser: false,
-        responseLimit: false,
-    },
-};
+const MAX_BATCH = 10;
 
 module.exports = async (req, res) => {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    try {
-        const busboy = Busboy({ headers: req.headers });
-        const fields = {};
-        const files = [];
+    const body = req.body || {};
+    const { smtpUser, smtpPass, displayName, replyTo, attachmentRefs, messages } = body;
 
-        busboy.on('field', (fieldname, val) => {
-            fields[fieldname] = val;
-        });
-
-        busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-            const chunks = [];
-            file.on('data', data => chunks.push(data));
-            file.on('end', () => {
-                let actualFilename = filename;
-                if (typeof filename === 'object' && filename.filename) {
-                    actualFilename = filename.filename;
-                }
-
-                files.push({
-                    filename: actualFilename,
-                    content: Buffer.concat(chunks),
-                    encoding,
-                    mimetype
-                });
-            });
-        });
-
-        busboy.on('finish', async () => {
-            try {
-                logger.info('Attempting to send email to: %s', fields.to || 'Unknown');
-
-                const smtpUser = fields.smtpUser;
-                const smtpPass = fields.smtpPass;
-
-                if (!smtpUser || !smtpPass) {
-                    throw new Error("Missing SMTP Credentials (User/Pass)");
-                }
-
-                const transporter = nodemailer.createTransport({
-                    service: 'gmail',
-                    auth: {
-                        user: smtpUser,
-                        pass: smtpPass
-                    }
-                });
-
-                const mailOptions = {
-                    from: `"${fields.displayName || 'KIIT Mailer'}" <${smtpUser}>`,
-                    to: fields.to,
-                    cc: fields.cc || undefined,
-                    bcc: fields.bcc || undefined,
-                    replyTo: fields.replyTo || undefined,
-                    subject: fields.subject,
-                    attachments: files
-                };
-                if (fields.html) mailOptions.html = fields.html;
-                if (fields.text) mailOptions.text = fields.text;
-                if (!fields.html && !fields.text) {
-                    throw new Error('Email body is empty (no html or text provided)');
-                }
-
-                const info = await transporter.sendMail(mailOptions);
-                logger.info('Email sent successfully. MessageID: %s', info.messageId);
-                res.status(200).json({ success: true, messageId: info.messageId });
-
-            } catch (error) {
-                logger.error("Mail Error: %s", error.message);
-                if (!res.headersSent) res.status(500).json({ error: error.message });
-            }
-        });
-
-        busboy.on('error', (err) => {
-            logger.error('Busboy error: %s', err);
-            if (!res.headersSent) res.status(500).json({ error: 'Upload failed: ' + err.message });
-        });
-
-        req.pipe(busboy);
-
-    } catch (initError) {
-        logger.error("Busboy Init Error: %s", initError.message);
-        res.status(500).json({ error: 'Server Init Error: ' + initError.message });
+    if (!smtpUser || !smtpPass) {
+        return res.status(400).json({ error: 'Missing SMTP Credentials (User/Pass)' });
     }
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: 'No messages provided' });
+    }
+    if (messages.length > MAX_BATCH) {
+        return res.status(400).json({ error: `Too many messages in one batch (max ${MAX_BATCH})` });
+    }
+
+    let attachments = [];
+    try {
+        attachments = await resolveAttachments(attachmentRefs);
+    } catch (err) {
+        logger.error('Attachment resolution error: %s', err.message);
+        return res.status(400).json({ error: `Attachment error: ${err.message}` });
+    }
+
+    const attachmentBytes = attachments.reduce((sum, a) => sum + (a.content ? a.content.length : 0), 0);
+
+    let transporter;
+    try {
+        transporter = createTransporter({ user: smtpUser, pass: smtpPass });
+    } catch (err) {
+        return res.status(400).json({ error: err.message });
+    }
+
+    const results = [];
+    for (const msg of messages) {
+        const to = (msg.to || '').trim();
+        if (!to) {
+            results.push({ to: msg.to || '', success: false, error: 'Missing recipient address', retryable: false });
+            continue;
+        }
+        if (!msg.subject) {
+            results.push({ to, success: false, error: 'Missing subject', retryable: false });
+            continue;
+        }
+        if (!msg.html && !msg.text) {
+            results.push({ to, success: false, error: 'Email body is empty (no html or text provided)', retryable: false });
+            continue;
+        }
+
+        // Server-side safety net mirroring the client's pre-send guard: total
+        // encoded message size must stay under Gmail's real 25 MB cap.
+        const bodyBytes = Buffer.byteLength(msg.html || '', 'utf8') + Buffer.byteLength(msg.text || '', 'utf8');
+        const estimatedEncoded = encodedSize(attachmentBytes) + bodyBytes;
+        if (estimatedEncoded > GMAIL_MAX_MESSAGE_BYTES) {
+            results.push({
+                to, success: false,
+                error: `Message would be ~${(estimatedEncoded / 1024 / 1024).toFixed(1)} MB encoded, over Gmail's 25 MB limit.`,
+                retryable: false,
+            });
+            continue;
+        }
+
+        const mailOptions = {
+            from: `"${displayName || 'KIIT Mailer'}" <${smtpUser}>`,
+            to,
+            cc: msg.cc || undefined,
+            bcc: msg.bcc || undefined,
+            replyTo: replyTo || undefined,
+            subject: msg.subject,
+            attachments,
+        };
+        if (msg.html) mailOptions.html = msg.html;
+        if (msg.text) mailOptions.text = msg.text;
+
+        try {
+            logger.info('Sending email to: %s', to);
+            const info = await transporter.sendMail(mailOptions);
+            results.push({ to, success: true, messageId: info.messageId });
+        } catch (error) {
+            const classified = classifyError(error);
+            logger.error('Mail error for %s: %s', to, classified.message);
+            results.push({ to, success: false, error: classified.message, retryable: classified.retryable });
+        }
+    }
+
+    transporter.close();
+    res.status(200).json({ results });
 };

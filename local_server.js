@@ -28,18 +28,33 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // API Routes
 const sendMailHandler = require('./api/send-mail');
+const configHandler = require('./api/config');
+const uploadTokenHandler = require('./api/upload-token');
+const cleanupHandler = require('./api/cleanup');
+const { uploadHandler, serveHandler } = require('./api/upload-local');
 
-app.post('/api/send-mail', async (req, res) => {
-    // Note: 'busboy' in send-mail.js reads directly from req
-    try {
-        await sendMailHandler(req, res);
-    } catch (e) {
-        logger.error("Send Mail Handler Error: %s", e.message, { stack: e.stack });
-        if (!res.headersSent) {
-            res.status(500).json({ error: e.message || 'Internal Server Error' });
+function wrap(handler, label) {
+    return async (req, res) => {
+        try {
+            await handler(req, res);
+        } catch (e) {
+            logger.error("%s Handler Error: %s", label, e.message, { stack: e.stack });
+            if (!res.headersSent) {
+                res.status(500).json({ error: e.message || 'Internal Server Error' });
+            }
         }
-    }
-});
+    };
+}
+
+app.post('/api/send-mail', wrap(sendMailHandler, 'Send Mail'));
+app.get('/api/config', wrap(configHandler, 'Config'));
+app.post('/api/upload-token', wrap(uploadTokenHandler, 'Upload Token'));
+app.post('/api/cleanup', wrap(cleanupHandler, 'Cleanup'));
+
+// Local-only attachment storage (no Vercel Blob store on localhost/.exe runs).
+// Raw binary body — kept off the global json/urlencoded parsers above.
+app.post('/api/upload', express.raw({ limit: '30mb', type: () => true }), wrap(uploadHandler, 'Local Upload'));
+app.get('/api/attachment/:id', wrap(serveHandler, 'Local Attachment Serve'));
 
 // Global Error Handler
 app.use((err, req, res, next) => {

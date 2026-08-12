@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KIIT Mailer - Dashboard</title>
+    <title>KIIT Mailer</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap"
         rel="stylesheet">
@@ -16,145 +16,170 @@
 
 <body>
 
-    <div class="app-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
+    <div class="app-shell">
+
+        <!-- Top bar -->
+        <header class="topbar">
             <div class="brand">
-                <span class="icon" style="font-size: 1.5rem;">📨</span>
+                <svg class="brand-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+                    <rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" stroke-width="1.7" />
+                    <path d="M3 6.5L12 13L21 6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
                 <span class="brand-text">KIIT <span class="text-accent">Mailer</span></span>
             </div>
 
-            <nav>
-                <button class="nav-btn active" data-tab="compose">
-                    <span class="icon">✉️</span> Compose
-                </button>
-                <button class="nav-btn" data-tab="settings" id="settingsTabBtn">
-                    <span class="icon">⚙️</span> Settings
-                </button>
-                <button class="nav-btn" data-tab="logs">
-                    <span class="icon">📜</span> Activity
-                </button>
+            <nav class="stepper" id="stepper" aria-label="Compose steps">
+                <button class="step-pill active" data-step="recipients"><span class="step-num">1</span> Recipients</button>
+                <span class="step-sep" aria-hidden="true"></span>
+                <button class="step-pill" data-step="compose"><span class="step-num">2</span> Compose</button>
+                <span class="step-sep" aria-hidden="true"></span>
+                <button class="step-pill" data-step="review"><span class="step-num">3</span> Review &amp; Send</button>
             </nav>
 
-            <div class="user-profile">
-                <div class="avatar" id="userAvatar">U</div>
-                <div class="user-info">
-                    <span class="name" id="userNameDisplay">User</span>
-                    <a href="index.html" class="logout">Setup Help</a>
-                </div>
+            <div class="topbar-actions">
+                <button class="icon-btn ghost" id="activityBtn" title="Activity log">
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none"><path d="M3 12h4l2 6 4-14 3 8h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <button class="account-chip" id="accountChip" title="Settings">
+                    <span class="avatar" id="userAvatar">U</span>
+                    <span class="account-name" id="userNameDisplay">Set up account</span>
+                </button>
             </div>
-        </aside>
+        </header>
 
-        <!-- Main Content -->
-        <main class="main-layout">
-            <div class="content-area">
+        <!-- Resume banner (global, any step) -->
+        <div id="resumeBanner" class="resume-banner hidden">
+            <div class="resume-text">
+                <strong>Unfinished batch detected</strong>
+                <span class="muted-small" id="resumeMeta"></span>
+            </div>
+            <div class="resume-actions">
+                <button type="button" id="resumeBtn" class="primary-btn small-btn">Resume</button>
+                <button type="button" id="discardResumeBtn" class="secondary-btn small-btn">Discard</button>
+            </div>
+        </div>
 
-                <!-- COMPOSE TAB -->
-                <div id="compose" class="tab-content active">
-                    <header class="tab-header">
-                        <h2>Compose Email</h2>
-                        <div class="header-actions">
-                            <button id="previewBtn" class="secondary-btn">👁️ Preview</button>
+        <!-- Degraded-mode banner (Vercel without a Blob store) -->
+        <div id="degradedBanner" class="degraded-banner hidden">
+            <span id="degradedBannerText"></span>
+        </div>
+
+        <!-- Main workspace: left work pane + right persistent preview -->
+        <main class="workspace">
+            <div class="work-pane">
+
+                <!-- STEP 1: RECIPIENTS -->
+                <section class="step-panel active" data-step-panel="recipients">
+                    <div class="segmented" id="recipientSourceSeg">
+                        <button class="seg-btn active" data-source="single">Single Recipient</button>
+                        <button class="seg-btn" data-source="csv">CSV Upload</button>
+                        <button class="seg-btn" data-source="manual">Manual Grid</button>
+                    </div>
+
+                    <!-- SINGLE -->
+                    <div id="singleFields" class="source-section card">
+                        <div class="input-group">
+                            <label>To Email(s) <span class="req">*</span></label>
+                            <input type="text" id="singleEmail" placeholder="recipient@example.com, another@example.com">
+                            <small class="hint">Separate multiple addresses with commas, semicolons, spaces, or new lines.</small>
                         </div>
-                    </header>
-
-                    <div class="form-container">
-
-                        <!-- Send Mode Selector -->
-                        <div class="segmented" id="sendModeSeg">
-                            <button class="seg-btn active" data-mode="single">Single Recipient</button>
-                            <button class="seg-btn" data-mode="bulk">Bulk Send</button>
+                        <div class="input-group">
+                            <label>Recipient Name <span class="hint-inline">becomes <code>{Name}</code></span></label>
+                            <input type="text" id="singleName" placeholder="e.g. Jane Doe">
                         </div>
+                        <details class="extra-fields-block">
+                            <summary>Add custom placeholders</summary>
+                            <div id="singleCustomFields" class="custom-fields-list"></div>
+                            <button type="button" id="addSingleFieldBtn" class="text-btn">+ Add field</button>
+                        </details>
+                    </div>
 
-                        <!-- SINGLE RECIPIENT FIELDS -->
-                        <div id="singleFields" class="mode-section">
-                            <div class="input-group">
-                                <label>To Email(s) <span class="req">*</span></label>
-                                <input type="text" id="singleEmail" placeholder="recipient@example.com, another@example.com">
-                                <small class="hint">Separate multiple To addresses with commas, semicolons, spaces, or new lines.</small>
+                    <!-- CSV -->
+                    <div id="bulkCsv" class="source-section" style="display:none;">
+                        <div class="card">
+                            <div class="file-drop-area" id="csvDrop">
+                                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" class="drop-icon"><path d="M12 3v12m0-12l-4 4m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                                <span class="file-msg">Drag &amp; drop a CSV here, or click to browse</span>
+                                <input type="file" id="csvFile" accept=".csv">
                             </div>
-                            <div class="input-group">
-                                <label>Recipient Name (optional, becomes <code>{Name}</code>)</label>
-                                <input type="text" id="singleName" placeholder="e.g. Jane Doe">
-                            </div>
-                            <details class="extra-fields-block">
-                                <summary>Add custom placeholders</summary>
-                                <div id="singleCustomFields" class="custom-fields-list"></div>
-                                <button type="button" id="addSingleFieldBtn" class="text-btn">+ Add Field</button>
-                            </details>
-                        </div>
-
-                        <!-- BULK FIELDS -->
-                        <div id="bulkFields" class="mode-section" style="display:none;">
-                            <div class="segmented inner" id="bulkSourceSeg">
-                                <button class="seg-btn active" data-source="csv">CSV Upload</button>
-                                <button class="seg-btn" data-source="manual">Manual Entry</button>
-                            </div>
-
-                            <!-- CSV -->
-                            <div id="bulkCsv" class="bulk-source">
-                                <div class="info-box">
-                                    ℹ️ CSV must have at least <strong>Name</strong> and <strong>Email</strong>
-                                    columns. Any extra columns become placeholders like <code>{Column}</code>.
-                                </div>
-                                <div class="input-group">
-                                    <label>Recipients CSV</label>
-                                    <div class="file-drop-area" id="csvDrop">
-                                        <span class="file-msg">Drag & Drop CSV or Click to Upload</span>
-                                        <input type="file" id="csvFile" accept=".csv">
-                                    </div>
-                                    <div class="csv-actions">
-                                        <span id="csvStatus" class="status-text">No file selected</span>
-                                        <button id="downloadTemplateBtn" class="text-btn" type="button">Download
-                                            Template</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Manual Grid -->
-                            <div id="bulkManual" class="bulk-source" style="display:none;">
-                                <div class="info-box">
-                                    ℹ️ Build your recipient list directly. Add columns to define custom placeholders.
-                                    A <strong>Name</strong> and <strong>Email</strong> column are required.
-                                    Tip: paste tabular data (Excel/Sheets) directly into any cell — tabs and newlines are handled automatically.
-                                </div>
-                                <div class="grid-toolbar">
-                                    <button type="button" id="addRowBtn" class="secondary-btn">+ Row</button>
-                                    <button type="button" id="addColBtn" class="secondary-btn">+ Column</button>
-                                    <button type="button" id="deleteSelectedBtn" class="secondary-btn danger-btn" style="display:none;">Delete Selected (<span id="selectedCount">0</span>)</button>
-                                    <button type="button" id="pasteImportBtn" class="secondary-btn">📋 Paste from Excel/TSV</button>
-                                    <button type="button" id="exportGridBtn" class="secondary-btn">⬇ Export CSV</button>
-                                    <button type="button" id="clearGridBtn" class="secondary-btn">Clear</button>
-                                    <span id="gridStatus" class="status-text"></span>
-                                </div>
-                                <div id="pasteImportArea" class="paste-import" style="display:none;">
-                                    <label>Paste tabular data (TSV / CSV — first row should be headers):</label>
-                                    <textarea id="pasteImportText" placeholder="Name\tEmail\nJohn Doe\tjohn@kiit.ac.in\nJane Roe\tjane@kiit.ac.in"></textarea>
-                                    <div class="paste-import-actions">
-                                        <button type="button" id="pasteImportApply" class="primary-btn small-btn">Import</button>
-                                        <button type="button" id="pasteImportCancel" class="secondary-btn">Cancel</button>
-                                        <label class="inline-check"><input type="checkbox" id="pasteImportAppend"> Append to existing rows</label>
-                                    </div>
-                                </div>
-                                <div class="grid-wrap">
-                                    <table id="manualGrid" class="data-grid"></table>
-                                </div>
+                            <div class="csv-actions">
+                                <span id="csvStatus" class="status-text">No file selected</span>
+                                <button id="downloadTemplateBtn" class="text-btn" type="button">Download template</button>
                             </div>
                         </div>
 
-                        <!-- COPY RECIPIENTS -->
+                        <!-- Column mapping (shared with manual grid) -->
+                        <div id="mappingCard" class="card" style="display:none;">
+                            <h4 class="section-heading">Column mapping</h4>
+                            <p class="muted-small">Each row's <strong>CC</strong> / <strong>BCC</strong> column is merged with the global CC/BCC below and sent only to that recipient — every column stays available as a <code>{Placeholder}</code>.</p>
+                            <div id="mappingRows" class="mapping-rows"></div>
+                        </div>
+
+                        <!-- Validation summary -->
+                        <div id="validationCard" class="card validation-card" style="display:none;">
+                            <div class="validation-stats" id="validationStats"></div>
+                            <div class="validation-details" id="validationDetails"></div>
+                        </div>
+                    </div>
+
+                    <!-- MANUAL GRID -->
+                    <div id="bulkManual" class="source-section" style="display:none;">
+                        <div class="card">
+                            <p class="muted-small">Build your list directly. Add columns for custom placeholders — a <strong>Name</strong>, <strong>Email</strong>, <strong>CC</strong> and <strong>BCC</strong> column are pre-created. Paste from Excel/Sheets directly into any cell.</p>
+                            <div class="grid-toolbar">
+                                <button type="button" id="addRowBtn" class="secondary-btn small-btn">+ Row</button>
+                                <button type="button" id="addColBtn" class="secondary-btn small-btn">+ Column</button>
+                                <button type="button" id="deleteSelectedBtn" class="secondary-btn danger-btn small-btn" style="display:none;">Delete selected (<span id="selectedCount">0</span>)</button>
+                                <button type="button" id="pasteImportBtn" class="secondary-btn small-btn">Paste from Excel/TSV</button>
+                                <button type="button" id="exportGridBtn" class="secondary-btn small-btn">Export CSV</button>
+                                <button type="button" id="clearGridBtn" class="secondary-btn small-btn">Clear</button>
+                                <span id="gridStatus" class="status-text"></span>
+                            </div>
+                            <div id="pasteImportArea" class="paste-import" style="display:none;">
+                                <label>Paste tabular data (TSV / CSV — first row should be headers):</label>
+                                <textarea id="pasteImportText" placeholder="Name&#9;Email&#9;CC&#10;John Doe&#9;john@kiit.ac.in&#9;hod@kiit.ac.in"></textarea>
+                                <div class="paste-import-actions">
+                                    <button type="button" id="pasteImportApply" class="primary-btn small-btn">Import</button>
+                                    <button type="button" id="pasteImportCancel" class="secondary-btn small-btn">Cancel</button>
+                                    <label class="inline-check"><input type="checkbox" id="pasteImportAppend"> Append to existing rows</label>
+                                </div>
+                            </div>
+                            <div class="grid-wrap">
+                                <table id="manualGrid" class="data-grid"></table>
+                            </div>
+                        </div>
+
+                        <div id="mappingCardManual" class="card" style="display:none;">
+                            <h4 class="section-heading">Column mapping</h4>
+                            <div id="mappingRowsManual" class="mapping-rows"></div>
+                        </div>
+
+                        <div id="validationCardManual" class="card validation-card" style="display:none;">
+                            <div class="validation-stats" id="validationStatsManual"></div>
+                            <div class="validation-details" id="validationDetailsManual"></div>
+                        </div>
+                    </div>
+
+                    <!-- Global CC/BCC (applies to every recipient, merged with per-row values) -->
+                    <div class="card">
+                        <h4 class="section-heading">Copy every email to (optional)</h4>
                         <div class="options-grid">
                             <div class="input-group">
-                                <label>CC (optional)</label>
-                                <input type="text" id="ccEmail" placeholder="cc@example.com, another@example.com">
+                                <label>CC</label>
+                                <input type="text" id="ccEmail" placeholder="e.g. iqac.head@kiit.ac.in">
                             </div>
                             <div class="input-group">
-                                <label>BCC (optional)</label>
-                                <input type="text" id="bccEmail" placeholder="bcc@example.com, another@example.com">
+                                <label>BCC</label>
+                                <input type="text" id="bccEmail" placeholder="e.g. audit@kiit.ac.in">
                             </div>
                         </div>
+                        <small class="hint">Merged with each row's own CC/BCC column, de-duplicated, and never repeats an address already in To.</small>
+                    </div>
+                </section>
 
-                        <!-- SUBJECT -->
+                <!-- STEP 2: COMPOSE -->
+                <section class="step-panel" data-step-panel="compose">
+                    <div class="card">
                         <div class="input-group">
                             <div class="label-row">
                                 <label>Subject <span class="req">*</span></label>
@@ -164,237 +189,249 @@
                             <div id="subjectWarn" class="warn-line" style="display:none;"></div>
                         </div>
 
-                        <!-- PREHEADER -->
                         <div class="input-group">
                             <div class="label-row">
-                                <label>Preheader (preview text shown next to subject in inbox)</label>
+                                <label>Preheader <span class="hint-inline">preview text next to subject in inbox</span></label>
                                 <span id="preheaderCounter" class="counter-text">0 chars</span>
                             </div>
                             <input type="text" id="preheader" placeholder="Optional: a short preview snippet recipients see in their inbox list" maxlength="200">
-                            <small class="hint">Injected as a hidden block at the top of the HTML body. Aim for 40–90 characters.</small>
-                        </div>
-
-                        <!-- BODY -->
-                        <div class="input-group">
-                            <label>Message Body</label>
-
-                            <div class="editor-controls">
-                                <div class="segmented small" id="editorSeg">
-                                    <button class="seg-btn active" data-editor="html">HTML</button>
-                                    <button class="seg-btn" data-editor="rich">Rich Text</button>
-                                    <button class="seg-btn" data-editor="text">Plain Text</button>
-                                </div>
-                                <div class="placeholder-toolbar" id="placeholderToolbar"></div>
-                            </div>
-
-                            <div class="rich-editor-container" id="richEditorParams" style="display:none;">
-                                <div id="editor-container"></div>
-                            </div>
-
-                            <div class="html-editor-container" id="htmlEditorParams">
-                                <textarea id="htmlEditor"
-                                    placeholder="<p>Hello {Name},</p><p>Your message here...</p>"></textarea>
-                                <div class="editor-hint">
-                                    Tip: Paste a full HTML document or just a fragment — it will be wrapped for email
-                                    clients automatically.
-                                </div>
-                            </div>
-
-                            <div class="text-editor-container" id="textEditorParams" style="display:none;">
-                                <textarea id="textEditor"
-                                    placeholder="Hello {Name},&#10;&#10;Plain text fallback message..."></textarea>
-                                <div class="editor-hint">
-                                    Plain text only — recipients see exactly this. Choose this mode only when HTML is
-                                    not desired.
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- ATTACHMENTS -->
-                        <div class="input-group">
-                            <label>Attachments</label>
-                            <div class="attachment-area">
-                                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-                                    <label for="attachments" class="secondary-btn"
-                                        style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                                        <span>📎</span> Attach Files
-                                    </label>
-                                    <button id="clearAttachmentsBtn" class="secondary-btn" style="display: none;"
-                                        type="button">×
-                                        Clear All</button>
-                                    <input type="file" id="attachments" multiple style="display: none;">
-                                </div>
-                                <div id="attachmentList" class="file-list"></div>
-                            </div>
-                        </div>
-
-                        <!-- BULK SEND OPTIONS -->
-                        <div id="bulkOptions" class="bulk-options" style="display:none;">
-                            <h4 class="section-heading">Send Options</h4>
-                            <div class="options-grid">
-                                <div class="input-group">
-                                    <label>Delay between sends (ms)</label>
-                                    <input type="number" id="delayMs" min="0" max="60000" step="100" value="800">
-                                    <small class="hint">Helps stay under Gmail burst limits. 500–1500 ms recommended.</small>
-                                </div>
-                                <div class="input-group">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="dedupToggle" checked>
-                                        <span class="slider"></span>
-                                        <span class="toggle-label">Drop duplicate emails (case-insensitive)</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div id="preflightPanel" class="preflight-panel" style="display:none;">
-                                <div class="preflight-header">
-                                    <strong>Pre-flight Check</strong>
-                                    <button type="button" id="refreshPreflightBtn" class="text-btn">↻ Refresh</button>
-                                </div>
-                                <div id="preflightBody" class="preflight-body"></div>
-                            </div>
-                            <button type="button" id="runPreflightBtn" class="secondary-btn">🔍 Run Pre-flight Check</button>
-                        </div>
-
-                        <!-- RESUME BANNER -->
-                        <div id="resumeBanner" class="resume-banner" style="display:none;">
-                            <div>
-                                <strong>⏸ Unfinished batch detected</strong>
-                                <div class="muted-small" id="resumeMeta"></div>
-                            </div>
-                            <div class="resume-actions">
-                                <button type="button" id="resumeBtn" class="primary-btn small-btn">Resume</button>
-                                <button type="button" id="discardResumeBtn" class="secondary-btn">Discard</button>
-                            </div>
-                        </div>
-
-                        <div class="action-bar">
-                            <button id="sendTestBtn" class="secondary-btn big-btn" type="button">✉ Send Test to Me</button>
-                            <button id="sendBtn" class="primary-btn">Send Email</button>
                         </div>
                     </div>
-                </div>
 
-                <!-- LOGS TAB -->
-                <div id="logs" class="tab-content">
-                    <header class="tab-header">
-                        <h2>Activity</h2>
-                        <button class="clear-btn" id="clearLogs">Clear Local View</button>
-                    </header>
-                    <div class="log-terminal" id="logTerminal">
-                        <div class="log-line system">System ready.</div>
+                    <div class="card">
+                        <div class="editor-controls">
+                            <div class="segmented small" id="editorSeg">
+                                <button class="seg-btn active" data-editor="html">HTML</button>
+                                <button class="seg-btn" data-editor="rich">Rich Text</button>
+                                <button class="seg-btn" data-editor="text">Plain Text</button>
+                            </div>
+                            <div class="placeholder-toolbar" id="placeholderToolbar"></div>
+                        </div>
+
+                        <div class="rich-editor-container" id="richEditorParams" style="display:none;">
+                            <div id="editor-container"></div>
+                        </div>
+
+                        <div class="html-editor-container" id="htmlEditorParams">
+                            <textarea id="htmlEditor" placeholder="<p>Hello {Name},</p><p>Your message here...</p>"></textarea>
+                        </div>
+
+                        <div class="text-editor-container" id="textEditorParams" style="display:none;">
+                            <textarea id="textEditor" placeholder="Hello {Name},&#10;&#10;Plain text fallback message..."></textarea>
+                        </div>
                     </div>
-                </div>
 
-                <!-- SETTINGS TAB -->
-                <div id="settings" class="tab-content">
-                    <header class="tab-header">
-                        <h2>Settings</h2>
-                    </header>
-                    <div class="form-container" style="max-width: 560px;">
-
-                        <div class="input-group">
-                            <label>KIIT Email Address <span class="req">*</span></label>
-                            <input type="email" id="settingsEmail" placeholder="rollno@kiit.ac.in">
+                    <div class="card">
+                        <h4 class="section-heading">Templates</h4>
+                        <div class="template-row">
+                            <select id="templateSelect" class="mini-select"></select>
+                            <button type="button" id="loadTemplateBtn" class="secondary-btn small-btn">Load</button>
+                            <button type="button" id="saveTemplateBtn" class="secondary-btn small-btn">Save current as…</button>
+                            <button type="button" id="deleteTemplateBtn" class="secondary-btn danger-btn small-btn">Delete</button>
+                            <button type="button" id="exportTemplatesBtn" class="text-btn">Export all</button>
+                            <label class="text-btn file-label">Import<input type="file" id="importTemplatesInput" accept=".json" style="display:none;"></label>
                         </div>
-
-                        <div class="input-group">
-                            <label>App Password <span class="req">*</span></label>
-                            <input type="password" id="settingsPass" placeholder="16-character app password">
-                            <small class="hint">Generate from your Google Account → Security → App Passwords.</small>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Display Name (Optional)</label>
-                            <input type="text" id="settingsDisplayName" placeholder="e.g. Jane Doe / KIIT IQAC">
-                        </div>
-
-                        <div class="input-group">
-                            <label>Reply-To Email (Optional)</label>
-                            <input type="email" id="settingsReplyTo" placeholder="reply-to@example.com">
-                        </div>
-
-                        <button id="saveSettingsBtn" class="primary-btn">Save Settings</button>
-
-                        <p class="hint" style="margin-top: 1rem;">
-                            🔒 Credentials are stored only in your browser's local storage and sent directly to your
-                            mail
-                            server when sending. They are never persisted on any external server.
-                        </p>
                     </div>
-                </div>
 
-                <footer class="app-footer">
-                    &copy; <span id="year"></span> KIIT Mailer.
-                </footer>
+                    <div class="card">
+                        <h4 class="section-heading">Attachments</h4>
+                        <div class="file-drop-area small" id="attachDrop">
+                            <span class="file-msg">Drag &amp; drop files, or click to attach</span>
+                            <input type="file" id="attachments" multiple style="display:none;">
+                        </div>
+                        <div id="attachmentList" class="file-list"></div>
+                        <div id="attachMeter" class="attach-meter" style="display:none;">
+                            <div class="attach-meter-bar"><div class="attach-meter-fill" id="attachMeterFill"></div></div>
+                            <div class="attach-meter-text" id="attachMeterText"></div>
+                        </div>
+                        <div id="attachWarnLine" class="warn-line" style="display:none;"></div>
+                    </div>
+                </section>
+
+                <!-- STEP 3: REVIEW & SEND -->
+                <section class="step-panel" data-step-panel="review">
+                    <div class="summary-grid">
+                        <div class="card summary-card">
+                            <span class="summary-label">From</span>
+                            <span class="summary-value" id="summaryFrom">—</span>
+                        </div>
+                        <div class="card summary-card">
+                            <span class="summary-label">Recipients</span>
+                            <span class="summary-value" id="summaryRecipients">0</span>
+                        </div>
+                        <div class="card summary-card">
+                            <span class="summary-label">CC/BCC coverage</span>
+                            <span class="summary-value" id="summaryCopies">—</span>
+                        </div>
+                        <div class="card summary-card">
+                            <span class="summary-label">Attachments</span>
+                            <span class="summary-value" id="summaryAttachments">None</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="preflight-header">
+                            <h4 class="section-heading">Pre-flight check</h4>
+                            <button type="button" id="refreshPreflightBtn" class="text-btn">↻ Refresh</button>
+                        </div>
+                        <div id="preflightBody" class="preflight-body"></div>
+                    </div>
+
+                    <div class="card">
+                        <h4 class="section-heading">Today's sending quota</h4>
+                        <div class="quota-bar"><div class="quota-fill" id="quotaFill"></div></div>
+                        <div class="muted-small" id="quotaText"></div>
+                    </div>
+
+                    <div class="card">
+                        <h4 class="section-heading">Send options</h4>
+                        <div class="options-grid">
+                            <div class="input-group">
+                                <label>Delay between batches (ms)</label>
+                                <input type="number" id="delayMs" min="0" max="60000" step="100" value="800">
+                                <small class="hint">Helps stay under Gmail burst limits. Each batch sends up to 10 recipients.</small>
+                            </div>
+                            <div class="input-group">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="dedupToggle" checked>
+                                    <span class="slider"></span>
+                                    <span class="toggle-label">Drop duplicate emails (case-insensitive)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button id="sendTestBtn" class="secondary-btn big-btn" type="button">Send test to me</button>
+                        <button id="sendBtn" class="primary-btn big-btn">Send Email</button>
+                    </div>
+                </section>
+
             </div>
+
+            <!-- PERSISTENT PREVIEW RAIL -->
+            <aside class="preview-pane">
+                <div class="preview-toolbar">
+                    <div class="preview-nav">
+                        <button class="icon-btn ghost" id="previewPrevBtn" title="Previous recipient">‹</button>
+                        <span id="previewRecipientLabel" class="preview-recipient-label">1 / 1</span>
+                        <button class="icon-btn ghost" id="previewNextBtn" title="Next recipient">›</button>
+                    </div>
+                    <div class="preview-toggles">
+                        <div class="segmented small" id="previewThemeSeg" title="Simulates how the recipient's mobile client may force-darken your email. The email itself is not modified.">
+                            <button class="seg-btn active" data-theme="light">Light</button>
+                            <button class="seg-btn" data-theme="dark">Forced Dark</button>
+                        </div>
+                        <div class="segmented small" id="previewViewportSeg">
+                            <button class="seg-btn active" data-viewport="desktop">🖥</button>
+                            <button class="seg-btn" data-viewport="mobile">📱</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="previewWarnLine" class="warn-line" style="display:none;"></div>
+                <div class="preview-stage" id="previewStage">
+                    <div class="gmail-frame" id="gmailFrame">
+                        <div class="gmail-subject-row">
+                            <h2 id="gmSubject">(no subject)</h2>
+                        </div>
+                        <div class="gmail-meta-row">
+                            <div class="gmail-avatar" id="gmAvatar">K</div>
+                            <div class="gmail-meta">
+                                <div class="gmail-from">
+                                    <strong id="gmFromName">Sender</strong>
+                                    <span id="gmFromEmail" class="muted">&lt;sender@example.com&gt;</span>
+                                </div>
+                                <div class="gmail-to muted">to <span id="gmTo">recipient@example.com</span></div>
+                            </div>
+                            <div class="gmail-date muted" id="gmDate"></div>
+                        </div>
+                        <div class="gmail-body-wrap">
+                            <iframe id="previewFrame" class="gmail-iframe" sandbox="allow-same-origin"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </aside>
         </main>
+
+        <footer class="app-footer">
+            &copy; <span id="year"></span> KIIT Mailer
+        </footer>
     </div>
 
-    <!-- Mode Switch Warning Modal -->
-    <div id="modeWarningModal" class="overlay hidden">
-        <div class="progress-card" style="text-align: left; width: 450px;">
-            <h3 style="margin-top:0; color: var(--warning);">⚠️ Switch editor?</h3>
-            <p style="color: #ccc; font-size: 0.95rem; line-height: 1.5;">
-                Switching editor modes may cause formatting loss. The content of the editor you are leaving will be
-                cleared.
-            </p>
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
-                <button id="cancelModeSwitch" class="secondary-btn">Cancel</button>
-                <button id="confirmModeSwitch" class="primary-btn"
-                    style="background: var(--warning); border-color: var(--warning);">Yes, Switch</button>
+    <!-- Settings Drawer -->
+    <div id="settingsDrawer" class="drawer hidden">
+        <div class="drawer-backdrop" id="settingsDrawerBackdrop"></div>
+        <div class="drawer-panel">
+            <div class="drawer-header">
+                <h3>Settings</h3>
+                <button class="icon-btn" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="drawer-body">
+                <div class="input-group">
+                    <label>KIIT Email Address <span class="req">*</span></label>
+                    <input type="email" id="settingsEmail" placeholder="rollno@kiit.ac.in">
+                </div>
+                <div class="input-group">
+                    <label>App Password <span class="req">*</span></label>
+                    <input type="password" id="settingsPass" placeholder="16-character app password">
+                    <small class="hint">Generate from your Google Account → Security → App Passwords.</small>
+                </div>
+                <div class="input-group">
+                    <label>Display Name (optional)</label>
+                    <input type="text" id="settingsDisplayName" placeholder="e.g. Jane Doe / KIIT IQAC">
+                </div>
+                <div class="input-group">
+                    <label>Reply-To Email (optional)</label>
+                    <input type="email" id="settingsReplyTo" placeholder="reply-to@example.com">
+                </div>
+                <button id="saveSettingsBtn" class="primary-btn">Save settings</button>
+                <p class="hint" style="margin-top:1rem;">🔒 Credentials are stored only in your browser's local storage and sent directly to your mail server when sending.</p>
             </div>
         </div>
     </div>
 
-    <!-- Preview Modal (Gmail-like) -->
-    <div id="previewModal" class="overlay hidden">
-        <div class="preview-card">
-            <div class="preview-toolbar">
-                <div class="preview-tools-left">
-                    <strong>Email Preview</strong>
-                    <select id="previewRecipient" class="mini-select" style="display:none;"></select>
-                </div>
-                <div class="preview-tools-right">
-                    <div class="segmented small" id="previewThemeSeg"
-                        title="Simulates how the recipient's mobile client may force-darken your email. The email itself is not modified.">
-                        <button class="seg-btn active" data-theme="light">☀️ Light</button>
-                        <button class="seg-btn" data-theme="dark">🌙 Forced Dark</button>
-                    </div>
-                    <div class="segmented small" id="previewViewportSeg">
-                        <button class="seg-btn active" data-viewport="desktop">🖥️ Desktop</button>
-                        <button class="seg-btn" data-viewport="mobile">📱 Mobile</button>
-                    </div>
-                    <button id="closePreviewBtn" class="icon-btn" title="Close">✕</button>
+    <!-- Activity Drawer -->
+    <div id="activityDrawer" class="drawer hidden">
+        <div class="drawer-backdrop" id="activityDrawerBackdrop"></div>
+        <div class="drawer-panel">
+            <div class="drawer-header">
+                <h3>Activity</h3>
+                <div class="drawer-header-actions">
+                    <button class="text-btn" id="clearLogs">Clear</button>
+                    <button class="icon-btn" id="closeActivityBtn">✕</button>
                 </div>
             </div>
-            <div class="preview-stage" id="previewStage">
-                <div class="gmail-frame" id="gmailFrame">
-                    <!-- Gmail-like header -->
-                    <div class="gmail-subject-row">
-                        <h2 id="gmSubject">(no subject)</h2>
-                        <span class="gmail-label">Inbox</span>
-                    </div>
-                    <div class="gmail-meta-row">
-                        <div class="gmail-avatar" id="gmAvatar">K</div>
-                        <div class="gmail-meta">
-                            <div class="gmail-from">
-                                <strong id="gmFromName">Sender</strong>
-                                <span id="gmFromEmail" class="muted">&lt;sender@example.com&gt;</span>
-                            </div>
-                            <div class="gmail-to muted">
-                                to <span id="gmTo">recipient@example.com</span> ▾
-                            </div>
-                        </div>
-                        <div class="gmail-date muted" id="gmDate"></div>
-                    </div>
-                    <div class="gmail-body-wrap">
-                        <iframe id="previewFrame" class="gmail-iframe" sandbox="allow-same-origin"></iframe>
-                    </div>
-                    <div class="gmail-footer-actions">
-                        <span class="gmail-action">↩ Reply</span>
-                        <span class="gmail-action">↪ Forward</span>
-                    </div>
+            <div class="drawer-body">
+                <div class="log-terminal" id="logTerminal">
+                    <div class="log-line system">System ready.</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mode Switch Warning Modal -->
+    <div id="modeWarningModal" class="overlay hidden">
+        <div class="progress-card modal-card">
+            <h3 class="warn-title">Switch editor?</h3>
+            <p class="muted-small">Switching editor modes may cause formatting loss. The content of the editor you are leaving will be cleared.</p>
+            <div class="modal-actions">
+                <button id="cancelModeSwitch" class="secondary-btn">Cancel</button>
+                <button id="confirmModeSwitch" class="primary-btn warn-btn">Yes, switch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Template Modal -->
+    <div id="saveTemplateModal" class="overlay hidden">
+        <div class="progress-card modal-card">
+            <h3>Save template</h3>
+            <div class="input-group">
+                <label>Template name</label>
+                <input type="text" id="templateNameInput" placeholder="e.g. Convocation Invite">
+            </div>
+            <div class="modal-actions">
+                <button id="cancelSaveTemplate" class="secondary-btn">Cancel</button>
+                <button id="confirmSaveTemplate" class="primary-btn">Save</button>
             </div>
         </div>
     </div>
@@ -405,9 +442,9 @@
             <div class="console-header">
                 <h3 id="consoleTitle">Sending Emails…</h3>
                 <div class="console-controls">
-                    <button type="button" id="pauseBtn" class="secondary-btn">⏸ Pause</button>
-                    <button type="button" id="resumeBtnConsole" class="secondary-btn" style="display:none;">▶ Resume</button>
-                    <button type="button" id="cancelBtn" class="secondary-btn danger-btn">✕ Cancel</button>
+                    <button type="button" id="pauseBtn" class="secondary-btn small-btn">Pause</button>
+                    <button type="button" id="resumeBtnConsole" class="secondary-btn small-btn" style="display:none;">Resume</button>
+                    <button type="button" id="cancelBtn" class="secondary-btn danger-btn small-btn">Cancel</button>
                 </div>
             </div>
             <div class="progress-bar-bg">
@@ -422,6 +459,11 @@
                 <span class="chip danger-chip">✕ <span id="failureCount">0</span> failed</span>
                 <span class="chip muted-chip">⏱ <span id="pendingCount">0</span> pending</span>
             </div>
+            <div class="results-filter segmented small" id="resultsFilterSeg">
+                <button class="seg-btn active" data-filter="all">All</button>
+                <button class="seg-btn" data-filter="success">Sent</button>
+                <button class="seg-btn" data-filter="failure">Failed</button>
+            </div>
             <div class="results-wrap">
                 <table id="resultsTable" class="results-table">
                     <thead><tr><th>#</th><th>Email</th><th>Status</th><th>Detail</th></tr></thead>
@@ -429,7 +471,8 @@
                 </table>
             </div>
             <div class="console-footer">
-                <button type="button" id="exportResultsBtn" class="secondary-btn" disabled>⬇ Export Results CSV</button>
+                <button type="button" id="retryFailedBtn" class="secondary-btn" style="display:none;">Retry failed only</button>
+                <button type="button" id="exportResultsBtn" class="secondary-btn" disabled>Export results CSV</button>
                 <button type="button" id="closeConsoleBtn" class="primary-btn" style="display:none;">Done</button>
             </div>
         </div>
@@ -438,7 +481,7 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <script src="js/app.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 
 </html>

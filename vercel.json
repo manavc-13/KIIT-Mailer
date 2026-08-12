@@ -3,6 +3,15 @@
         "api/send-mail.js": {
             "maxDuration": 60,
             "memory": 1024
+        },
+        "api/upload-token.js": {
+            "maxDuration": 30
+        },
+        "api/cleanup.js": {
+            "maxDuration": 15
+        },
+        "api/config.js": {
+            "maxDuration": 10
         }
     },
     "rewrites": [
