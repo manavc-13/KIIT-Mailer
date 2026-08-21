@@ -72,7 +72,7 @@ export function textToHtml(text) {
     const body = escaped.split(/\n/).map(l => l || '&nbsp;').join('<br>');
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light"></head>
 <body style="margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#1f2328; background:#ffffff;">
-<div style="max-width:600px; margin:0 auto;">${body}</div>
+<div style="max-width:600px; margin:0;">${body}</div>
 </body></html>`;
 }
 
@@ -91,7 +91,7 @@ export function wrapRichContent(html) {
 </style>
 </head>
 <body>
-<div style="max-width:600px; margin:0 auto;">${html}</div>
+<div style="max-width:600px; margin:0;">${html}</div>
 </body>
 </html>`;
 }
