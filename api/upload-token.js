@@ -12,9 +12,8 @@ const logger = require('../lib/logger');
 const mailer = require('../lib/mailer');
 
 // Guard the require: @vercel/blob is only needed when a Blob store is
-// actually configured. Local/.exe runs never hit this route (they use
-// api/upload-local.js instead), so don't let a missing package crash the
-// whole server on startup.
+// actually configured. The local dev server never hits this route (it uses
+// lib/local-upload.js instead), so don't let a missing package crash it.
 let handleUpload = null;
 try {
     ({ handleUpload } = require('@vercel/blob/client'));

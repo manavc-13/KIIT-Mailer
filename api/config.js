@@ -6,9 +6,8 @@
 //   'blob'   - Vercel deployment with a Blob store configured (BLOB_READ_WRITE_TOKEN
 //              set). Browser uploads straight to Blob storage; send-mail fetches
 //              the URL. Supports attachments up to Gmail's real ~18 MB raw budget.
-//   'local'  - Running via `npm start` / the packaged .exe. Browser uploads to a
-//              local temp directory; send-mail reads it back from disk. Same
-//              ~18 MB budget (only Gmail's cap applies, not Vercel's).
+//   'local'  - Local dev server (`npm start`). Browser uploads to a local temp
+//              directory; send-mail reads it back from disk. Same ~18 MB budget.
 //   'inline' - Deployed on Vercel WITHOUT a Blob store. There is nowhere to
 //              stage the file, so it travels base64-encoded inside the same
 //              JSON request as the message — capped well under Vercel's
@@ -23,8 +22,12 @@ module.exports = async (req, res) => {
     const hasBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
     const isVercel = !!process.env.VERCEL;
 
+    // Blob is only needed on Vercel (4.5 MB function body cap). The local dev
+    // server always stages on local disk, even if a BLOB_READ_WRITE_TOKEN is in
+    // .env, so local testing doesn't write into the production Blob store.
+    // To exercise the real website path locally, run with VERCEL=1.
     let provider, maxRawAttachmentBytes, batchSize, degraded;
-    if (hasBlob) {
+    if (isVercel && hasBlob) {
         provider = 'blob';
         maxRawAttachmentBytes = mailer.maxRawAttachmentBytes();
         batchSize = 10;

@@ -5,12 +5,37 @@ const portfinder = require('portfinder');
 const logger = require('./lib/logger');
 // const db = require('./lib/storage'); // DB Removed
 
-// Try loading from .env file (supports both local dev and inside pkg)
+// Local development server for the website (production runs on Vercel, which
+// serves public/ statically and api/*.js as serverless functions).
 dotenv.config({ path: path.join(__dirname, '.env') });
-// Fallback: If .env is in CWD (useful if user wants to override config without rebuilding exe)
-dotenv.config();
 
 const app = express();
+
+// API handlers
+const sendMailHandler = require('./api/send-mail');
+const configHandler = require('./api/config');
+const uploadTokenHandler = require('./api/upload-token');
+const cleanupHandler = require('./api/cleanup');
+const { uploadHandler, serveHandler } = require('./lib/local-upload');
+const { sweepStaleLocalUploads } = require('./lib/attachments');
+
+function wrap(handler, label) {
+    return async (req, res) => {
+        try {
+            await handler(req, res);
+        } catch (e) {
+            logger.error("%s Handler Error: %s", label, e.message, { stack: e.stack });
+            if (!res.headersSent) {
+                res.status(500).json({ error: e.message || 'Internal Server Error' });
+            }
+        }
+    };
+}
+
+// Local-only attachment storage. Registered BEFORE the global json/urlencoded
+// parsers: otherwise a .json (or form-encoded) attachment body was consumed by
+// those parsers first and the upload failed with "Empty upload body".
+app.post('/api/upload', express.raw({ limit: '30mb', type: () => true }), wrap(uploadHandler, 'Local Upload'));
 
 // Middleware for JSON and URL-encoded data
 // Increased limits to avoid "PayloadTooLargeError"
@@ -27,40 +52,29 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API Routes
-const sendMailHandler = require('./api/send-mail');
-const configHandler = require('./api/config');
-const uploadTokenHandler = require('./api/upload-token');
-const cleanupHandler = require('./api/cleanup');
-const { uploadHandler, serveHandler } = require('./api/upload-local');
-
-function wrap(handler, label) {
-    return async (req, res) => {
-        try {
-            await handler(req, res);
-        } catch (e) {
-            logger.error("%s Handler Error: %s", label, e.message, { stack: e.stack });
-            if (!res.headersSent) {
-                res.status(500).json({ error: e.message || 'Internal Server Error' });
-            }
-        }
-    };
-}
-
 app.post('/api/send-mail', wrap(sendMailHandler, 'Send Mail'));
 app.get('/api/config', wrap(configHandler, 'Config'));
 app.post('/api/upload-token', wrap(uploadTokenHandler, 'Upload Token'));
 app.post('/api/cleanup', wrap(cleanupHandler, 'Cleanup'));
 
-// Local-only attachment storage (no Vercel Blob store on localhost/.exe runs).
-// Raw binary body — kept off the global json/urlencoded parsers above.
-app.post('/api/upload', express.raw({ limit: '30mb', type: () => true }), wrap(uploadHandler, 'Local Upload'));
 app.get('/api/attachment/:id', wrap(serveHandler, 'Local Attachment Serve'));
 
-// Global Error Handler
+// Global Error Handler (keeps body-parser errors like "too large" / bad JSON
+// as their real 4xx status with a readable message instead of a blanket 500).
 app.use((err, req, res, next) => {
     logger.error("Unhandled Express Error: %s", err.message, { stack: err.stack });
-    res.status(500).json({ error: 'Internal Server Error' });
+    const status = err.status || err.statusCode || 500;
+    const message = err.type === 'entity.too.large'
+        ? 'Upload too large for the local server.'
+        : (status < 500 ? err.message : 'Internal Server Error');
+    res.status(status).json({ error: message });
 });
+
+// Uploads are normally deleted by the browser, but a crash or killed tab can
+// leave them behind in the OS temp dir. Sweep anything older than a day.
+sweepStaleLocalUploads(24 * 60 * 60 * 1000)
+    .then(n => { if (n) logger.info('Removed %d stale local upload(s)', n); })
+    .catch(err => logger.warn('Stale upload sweep failed: %s', err.message));
 
 // Uncaught Exception / Rejection Handlers
 process.on('uncaughtException', (err) => {
@@ -82,12 +96,11 @@ portfinder.getPortPromise()
         app.listen(port, () => {
             const separator = '=================================================';
             console.log(`\n${separator}`);
-            console.log(`🚀 IQAC Mailer Local Server Running`);
+            console.log(`🚀 IQAC Mailer local dev server running`);
             console.log(`-------------------------------------------------`);
             console.log(`👉 Access URL  : http://localhost:${port}`);
             console.log(`👉 Environment : ${process.env.NODE_ENV || 'development'}`);
             console.log(`👉 Logs Path   : ${path.join(process.cwd(), 'logs')}`);
-            console.log(`👉 Data Path   : ${path.join(process.cwd(), 'data')}`);
             console.log(`${separator}\n`);
 
             logger.info(`Server started on port ${port}`);

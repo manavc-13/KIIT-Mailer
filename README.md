@@ -6,7 +6,7 @@ upload or an in-browser editable data grid — with **per-recipient CC/BCC** —
 and preview exactly how the email will look in clients like Gmail before you
 send.
 
-Runs locally (`npm start` / the packaged `.exe`) or deployed on Vercel.
+Deployed on Vercel. `npm start` runs a local development server.
 
 ## Features
 
@@ -54,9 +54,12 @@ Runs locally (`npm start` / the packaged `.exe`) or deployed on Vercel.
 
 ## Quick Start
 
+Use the deployed Vercel site. To run it locally for development:
+
 ```bash
 npm install
-npm start
+npm start          # local dev server; attachments are staged on local disk
+VERCEL=1 npm start # same, but uses Vercel Blob exactly like the live site
 ```
 
 Then open the URL printed in the console (typically `http://localhost:3000`).
@@ -110,8 +113,8 @@ send request. Now:
   set — create one under Storage → Blob in the Vercel dashboard): attachments
   upload directly from the browser to Blob storage, up to the full ~18 MB
   budget, and are deleted after you remove them or close the tab.
-- **Running locally / the packaged `.exe`**: attachments upload to a local
-  temp directory; same ~18 MB budget.
+- **Local dev server** (`npm start`): attachments upload to a local temp
+  directory; same ~18 MB budget.
 - **Deployed on Vercel without a Blob store**: a degraded fallback embeds
   small attachments (~2.8 MB raw) directly in the send request. The app shows
   a banner explaining this and how to remove the limit (configure Blob

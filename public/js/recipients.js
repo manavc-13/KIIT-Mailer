@@ -189,15 +189,20 @@ function refreshManualMappingAndValidation() {
 export function setupRecipientSourceToggle() {
     els.recipientSourceSeg.querySelectorAll('.seg-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            els.recipientSourceSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            state.recipientSource = btn.dataset.source;
-            els.singleFields.style.display = state.recipientSource === 'single' ? 'block' : 'none';
-            els.bulkCsv.style.display = state.recipientSource === 'csv' ? 'block' : 'none';
-            els.bulkManual.style.display = state.recipientSource === 'manual' ? 'block' : 'none';
+            setRecipientSource(btn.dataset.source);
             notifyChanged();
         });
     });
+}
+
+// Single place that keeps state.recipientSource and the visible tab/section
+// in sync (also used when a saved draft is restored on page load).
+export function setRecipientSource(source) {
+    state.recipientSource = ['single', 'csv', 'manual'].includes(source) ? source : 'single';
+    els.recipientSourceSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.source === state.recipientSource));
+    els.singleFields.style.display = state.recipientSource === 'single' ? 'block' : 'none';
+    els.bulkCsv.style.display = state.recipientSource === 'csv' ? 'block' : 'none';
+    els.bulkManual.style.display = state.recipientSource === 'manual' ? 'block' : 'none';
 }
 
 // ---------- Single recipient extras ----------
@@ -210,7 +215,7 @@ export function setupSingleExtras() {
     els.singleName.addEventListener('input', notifyChanged);
 }
 
-function renderSingleExtras() {
+export function renderSingleExtras() {
     els.singleCustomFields.innerHTML = '';
     state.singleExtras.forEach((f, idx) => {
         const row = document.createElement('div');

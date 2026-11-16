@@ -83,7 +83,9 @@ module.exports = async (req, res) => {
         }
 
         const mailOptions = {
-            from: `"${displayName || 'KIIT Mailer'}" <${smtpUser}>`,
+            // Address object, not a hand-built string: a display name with a
+            // quote or comma (e.g. 'IQAC, "KIIT"') used to corrupt the header.
+            from: { name: String(displayName || 'KIIT Mailer'), address: smtpUser },
             to,
             cc: msg.cc || undefined,
             bcc: msg.bcc || undefined,

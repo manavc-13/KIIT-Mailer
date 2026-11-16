@@ -5,7 +5,7 @@ import { els } from './dom.js';
 import { state, STORAGE_TEMPLATES, STORAGE_DRAFT, DEFAULT_HTML, DEFAULT_TEXT } from './state.js';
 import { applyEditorMode } from './compose.js';
 import { showToast } from './ui.js';
-import { downloadFile } from './util.js';
+import { downloadFile, escapeAttr } from './util.js';
 
 const BUILTIN_NAME = 'KIIT Default (built-in)';
 
@@ -41,7 +41,7 @@ export function populateTemplateSelect() {
     const templates = loadTemplates();
     const names = Object.keys(templates);
     els.templateSelect.innerHTML = [`<option value="${BUILTIN_NAME}">${BUILTIN_NAME}</option>`]
-        .concat(names.map(n => `<option value="${n}">${n}</option>`)).join('');
+        .concat(names.map(n => `<option value="${escapeAttr(n)}">${escapeAttr(n)}</option>`)).join('');
 }
 
 export function setupTemplates() {
@@ -106,6 +106,10 @@ export function setupTemplates() {
         try {
             const text = await file.text();
             const incoming = JSON.parse(text);
+            if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+                throw new Error('expected a JSON object of templates (use "Export all" to create one)');
+            }
+            delete incoming[BUILTIN_NAME];
             const templates = { ...loadTemplates(), ...incoming };
             saveTemplates(templates);
             populateTemplateSelect();

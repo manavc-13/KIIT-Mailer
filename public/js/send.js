@@ -12,7 +12,7 @@ import {
     getRecipients, currentRoleMap, getEmailFromRow, canonicalizeRow, resolveCopies, computeValidation, currentHeaders,
 } from './recipients.js';
 import { buildMessagePayload } from './compose.js';
-import { getAttachmentRefs, attachmentsSummary } from './attachments.js';
+import { getAttachmentRefs, attachmentsSummary, attachmentsBlockingSend } from './attachments.js';
 import { showToast, log, openSettingsDrawer, goToStep } from './ui.js';
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -105,9 +105,17 @@ function validateCredentials() {
     return true;
 }
 
+function checkAttachmentsReady() {
+    const reason = attachmentsBlockingSend();
+    if (!reason) return true;
+    showToast(reason, 'warning');
+    return false;
+}
+
 async function startFresh() {
     if (state.isSending) return;
     if (!validateCredentials()) return;
+    if (!checkAttachmentsReady()) { goToStep('compose'); return; }
 
     const payload = buildMessagePayload();
     if (!payload.subject) { showToast('Please enter a subject', 'warning'); goToStep('compose'); return; }
@@ -164,13 +172,18 @@ async function resumeSaved() {
     };
     state.sendQueue = buildQueueItems(saved.rows, saved.payload, saved.roleMap);
     state.sendResults = saved.results || [];
+    // Keep the original row numbers so results stay unique across the resume.
+    const offset = state.sendResults.reduce((m, r) => Math.max(m, r.index || 0), 0);
+    state.sendQueue.forEach((item, i) => {
+        item.index = (saved.indices && saved.indices[i]) || offset + i + 1;
+    });
     state.sendCursor = 0;
     await runQueue(true);
 }
 
 async function retryFailedOnly() {
-    const failedEmails = new Set(state.sendResults.filter(r => !r.ok).map(r => r.email));
-    const failedItems = state.sendQueue.filter(item => failedEmails.has(item.email));
+    const failedIdx = new Set(state.sendResults.filter(r => !r.ok).map(r => r.index));
+    const failedItems = state.sendQueue.filter(item => failedIdx.has(item.index));
     if (!failedItems.length) return;
     state.sendResults = state.sendResults.filter(r => r.ok);
     state.sendQueue = failedItems;
@@ -223,6 +236,7 @@ function persistQueue() {
         displayName: state.sendMeta.displayName,
         replyTo: state.sendMeta.replyTo,
         rows: remaining.map(item => item.row),
+        indices: remaining.map(item => item.index),
         results: state.sendResults,
     };
     try {
@@ -254,6 +268,7 @@ export function checkPendingQueue() {
 async function sendTestToSelf() {
     if (state.isSending) return;
     if (!validateCredentials()) return;
+    if (!checkAttachmentsReady()) return;
     const payload = buildMessagePayload();
     if (!payload.subject) { showToast('Please enter a subject', 'warning'); return; }
     if (!payload.htmlPayload.trim() && !payload.textPayload.trim()) {
@@ -344,8 +359,13 @@ function openSendConsole(total, isRetry) {
 function appendPendingResult(item) {
     const tbody = els.resultsTable.querySelector('tbody');
     const tr = document.createElement('tr');
+    // Keyed by queue index, not email: duplicate addresses (dedup off) and
+    // "Retry failed only" (which re-adds the same emails) used to update the
+    // wrong row and leave the new one stuck on "Sending...".
+    const prev = tbody.querySelector(`tr[data-idx="${item.index}"]`);
+    if (prev) prev.remove();
     tr.className = 'pending';
-    tr.dataset.email = item.email;
+    tr.dataset.idx = String(item.index);
     tr.innerHTML = `<td>${item.index}</td><td>${escapeAttr(item.email)}</td><td class="status-cell">⏳ Sending…</td><td>—</td>`;
     tbody.appendChild(tr);
     tr.scrollIntoView({ block: 'nearest' });
@@ -365,7 +385,7 @@ function finalizeResult(item, result) {
     if (ok) bumpDailyCount();
     state.sendResults.push({ index: item.index, email: item.email, ok, detail: result.messageId || result.error || '' });
     const tbody = els.resultsTable.querySelector('tbody');
-    const tr = tbody.querySelector(`tr[data-email="${CSS.escape(item.email)}"]`);
+    const tr = tbody.querySelector(`tr[data-idx="${item.index}"]`);
     if (tr) {
         tr.classList.remove('pending');
         tr.classList.add(ok ? 'success' : 'failure');

@@ -21,7 +21,12 @@ export function initQuill() {
                 [{ align: [] }],
                 ['link', 'image', 'blockquote'],
                 ['clean']
-            ]
+            ],
+            // Without this, Quill's paste handler tries to preserve the *visual*
+            // line layout of the source (Word/Docs/Notepad), turning every
+            // hard-wrapped source line into its own <p>/<br> in the output HTML
+            // instead of letting the paragraph reflow to the recipient's window.
+            clipboard: { matchVisual: false }
         }
     });
     state.quill.on('text-change', () => onBodyChanged());

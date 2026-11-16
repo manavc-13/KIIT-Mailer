@@ -5,7 +5,7 @@ import { state, STORAGE_SETTINGS } from './state.js';
 import { showToast, log, loadHistory, setupLogs, setupStepper, setupDrawers, goToStep } from './ui.js';
 import {
     setupRecipientSourceToggle, setupSingleExtras, setupCSV, setupManualGrid, renderManualGrid,
-    setupGlobalCopies, onChange as onRecipientsChanged,
+    setupGlobalCopies, setRecipientSource, renderSingleExtras, onChange as onRecipientsChanged,
 } from './recipients.js';
 import {
     initQuill, setupEditorMode, setupSubjectHelpers, updateSubjectHelpers, updatePreheaderCounter,
@@ -129,7 +129,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadHistory();
 
     const restored = restoreDraft();
-    if (restored) showToast('Restored your last draft', 'info');
+    if (restored) {
+        setRecipientSource(state.recipientSource);
+        renderSingleExtras();
+        // CSV rows aren't persisted in the draft (they can be large) - say so
+        // instead of silently showing an empty recipient list.
+        const csvNote = state.recipientSource === 'csv' && !state.csvData ? ' - re-upload your CSV to continue' : '';
+        showToast('Restored your last draft' + csvNote, 'info');
+    }
 
     renderManualGrid();
     populateTemplateSelect();
