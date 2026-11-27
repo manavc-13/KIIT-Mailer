@@ -120,7 +120,7 @@ Thumbs.db
 *.swo
 
 # Project specific
-data/
+/data/
 sqlite.db
 local_server.exe
 IQACMailer.exe
