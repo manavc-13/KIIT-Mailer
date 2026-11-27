@@ -1,135 +1,94 @@
 # KIIT Mailer
 
-A web-based mailing utility for KIIT University IQAC. Compose HTML emails
-(with plain-text fallback), send to a single recipient or in bulk via CSV
-upload or an in-browser editable data grid — with **per-recipient CC/BCC** —
-and preview exactly how the email will look in clients like Gmail before you
-send.
+The institutional mailing service of the Internal Quality Assurance Cell (IQAC), KIIT. Staff sign in, pick an
+`@kiit.ac.in` sender account the administrator has allotted to them, and send formal, letterhead-styled email
+to one person or thousands, personalised per recipient or as a single BCC broadcast.
 
-Deployed on Vercel. `npm start` runs a local development server.
+- **Login wall + access control.** No self-registration. The administrator creates users, assigns roles, and
+  allots which sender accounts each user may send from.
+- **Sender accounts.** Each `@kiit.ac.in` account has its Google App Password stored **encrypted on the server**
+  (AES-256-GCM). It is tested against Gmail before it can be saved, and never sent back to any browser. Each
+  account has its own display name, reply-to, signature, default letterhead and daily quota.
+- **Templates.** Personal templates, plus templates the administrator shares with everyone or with chosen people.
+  Switch template and sender in one click; the sender's signature and letterhead follow automatically.
+- **Letterheads.** Five themes: Heritage, Meridian, Letterhead, Slate (ported from the IQAC email designs) and Plain.
+- **Editor.** Rich text with email-safe fonts (universal fonts plus web fonts with matched fallbacks), sizes,
+  colours, tables, images, buttons, callouts and detail panels. Pasting from Google Docs or Word keeps fonts,
+  sizes, colours, lists and tables. An HTML mode is available for hand-built emails.
+- **Honest preview.** Gmail (desktop and mobile), Apple Mail on iPhone, an Outlook for Windows approximation,
+  dark mode and plain text, all rendered by the same server code that sends. It also shows which fonts fall back
+  where, Gmail's 102 KB clipping limit, and a compatibility report.
+- **Deliverability.** Every message is multipart (HTML plus plain text) with a proper Message-ID, CSS inlined,
+  no `data:` images, paced sending, and per-account quotas counted the way Gmail counts them (To + CC + BCC).
+  Optional one-click unsubscribe (RFC 8058) feeds a suppression list. A pre-send checklist flags spam triggers,
+  unresolved placeholders, missing alt text, risky links and oversized HTML.
+- **Server-side send jobs.** Pause, resume (even from another device), cancel, retry failed, and export CSV.
+  BCC broadcasts are split into groups of 90, because Gmail rejects more than 100 recipients per message.
+- **Sent history and audit log.** Every sign-in, account change, template share and send is recorded.
 
-## Features
+## Stack
 
-- **3-step compose flow** — Recipients → Compose → Review & Send, with a
-  persistent live preview pane throughout.
-- **HTML-First Composer** — primary editor for raw HTML, with a Rich Text mode
-  (Quill) and a secondary Plain-Text editor for the text MIME part.
-- **Single & Bulk Send** —
-  - **Single Recipient**: send to one address with optional custom placeholder
-    fields you define inline.
-  - **Bulk via CSV**: upload a CSV. Columns are auto-detected case-insensitively
-    (`Email`, `E-mail`, `email address`, … all work) with an editable mapping
-    panel if auto-detection needs correcting.
-  - **Bulk via Manual Entry**: an editable spreadsheet-like grid in the
-    browser with add/remove rows, custom columns, and inline validation.
-- **Per-recipient CC/BCC** — add `CC` and `BCC` columns to your CSV or grid;
-  each row's copies are merged with the global CC/BCC fields, de-duplicated,
-  and never repeat an address already in To. See [CC/BCC columns](#ccbcc-columns)
-  below.
-- **Placeholders** — any column becomes a `{Column}` placeholder usable in
-  Subject, HTML, and Plain Text, resolved case-insensitively.
-- **Templates & drafts** — save/load/export/import named templates; your
-  in-progress compose is autosaved and restored after an accidental refresh.
-- **Email-Client-Accurate Preview** — Gmail-style chrome (sender, subject,
-  recipient, date) wrapping a sandboxed iframe of the actual HTML, updated
-  live as you type.
-  - **Light / Forced-Dark** toggle (simulates a mail client re-theming your
-    email; the email itself always renders light — see [Notes](#notes))
-  - **Desktop / Mobile** viewport toggle
-  - **Per-recipient navigation** (◀ / ▶) when a list is loaded
-- **Attachments sized against Gmail's real limit** — a live meter shows raw
-  size, base64-encoded size, and % of Gmail's 25 MB message cap, with a soft
-  warning above 10 MB. See [Attachment limits](#attachment-limits).
-- **Batched, resumable bulk sends** — up to 10 recipients per request over a
-  pooled SMTP connection (instead of one connection per email), automatic
-  retry with backoff on transient Gmail throttling, pause/cancel/resume
-  across a browser refresh, and a **Retry failed only** button.
-- **Plain-English send errors** — bad App Password, daily quota exhausted,
-  message too large, etc. are recognized and explained instead of showing raw
-  SMTP text.
-- **Activity Log** — local timestamped log of sends and errors.
-- **Local Settings** — SMTP credentials (KIIT email + Google App Password) are
-  stored only in your browser's `localStorage` and sent directly to the mail
-  server when sending.
-
-## Quick Start
-
-Use the deployed Vercel site. To run it locally for development:
-
-```bash
-npm install
-npm start          # local dev server; attachments are staged on local disk
-VERCEL=1 npm start # same, but uses Vercel Blob exactly like the live site
-```
-
-Then open the URL printed in the console (typically `http://localhost:3000`).
-
-1. On first launch, the **Settings** drawer opens automatically. Enter:
-   - your `*@kiit.ac.in` email
-   - the Google App Password (see the welcome page for steps)
-   - optional display name and reply-to
-2. **Recipients** step — pick Single / CSV / Manual Grid, and (for CSV/Grid)
-   confirm the column mapping and global CC/BCC.
-3. **Compose** step — write the subject/body, attach files, optionally save
-   as a template.
-4. **Review & Send** step — check the pre-flight summary and quota, then
-   **Send test to me** or **Send**.
-
-## CC/BCC columns
-
-Add a `CC` and/or `BCC` column to your CSV or manual grid (the manual grid
-creates them by default). Each recipient's row can carry its own copy
-addresses — separate multiple addresses in one cell with `;` (or a comma, if
-you quote the cell). At send time, for every recipient:
+Vite + React + TypeScript (Tailwind, shadcn/ui) · Hono API bundled into a single Vercel function ·
+Neon Postgres via Drizzle · Nodemailer over `smtp.gmail.com:465` · TipTap editor · juice and html-to-text.
 
 ```
-final CC  = row's CC ∪ global CC field   (de-duplicated, minus the To address)
-final BCC = row's BCC ∪ global BCC field (de-duplicated, minus To and final CC)
+src/      React app (pages, compose/, editor/, preview/, templates/, admin/, history/)
+server/   Hono app, routes/, lib/ (render pipeline, jobs, mailer, lint, uploads, auth), db/ (schema + migrations),
+          dev.ts (local API server), vercel.ts (production function entry)
+shared/   Code used by both sides: API types, themes, fonts, recipients/CC-BCC rules, text helpers
+scripts/  create-admin, migrate, build-vercel (production build), build-caniemail
+tests/    Vitest suites
 ```
 
-The global CC/BCC fields (Recipients step) also support placeholders, e.g.
-`{Supervisor}`, if that column exists.
+## Setup
 
-Column names don't have to be exactly `CC`/`BCC` — the mapping panel
-auto-detects common variants (`cc email`, `copy`, `bcc address`, …) and lets
-you remap manually.
+1. `npm install`
+2. Copy `.env.example` to `.env` and fill it in. **Never change `APP_ENCRYPTION_KEY` once sender accounts exist.**
+3. `npm run db:migrate` creates the tables.
+4. `npm run create-admin -- --email you@kiit.ac.in --name "Your Name"` creates the first administrator. You
+   are prompted for a password, or add `--generate` for a temporary one that must be changed at first sign-in.
+5. `npm run dev` starts the app at http://localhost:5173 (the API runs on :8787 and is proxied).
+6. Sign in, open **Sender accounts**, add an `@kiit.ac.in` account with its App Password, then add users and
+   allot accounts to them.
 
-## Attachment limits
+**Creating a Google App Password:** sign in to the sender mailbox, then go to Google Account → Security →
+2-Step Verification (it must be on) → App passwords (myaccount.google.com/apppasswords) and create one named
+"KIIT Mailer". Paste the 16 letters into the app.
 
-Gmail (and Google Workspace) caps the total **encoded** message size at
-**25 MB**; base64 inflates raw attachment bytes by ~4/3, so the real usable
-raw-attachment budget is roughly **18 MB**. The app enforces this — not an
-arbitrary flat cap — and shows both numbers live as you attach files, with a
-soft warning above 10 MB (many external mail servers reject messages smaller
-than Gmail's own limit).
+| Command | What it does |
+|---|---|
+| `npm run dev` | API + web dev servers |
+| `npm test` | All unit tests |
+| `npm run typecheck` | TypeScript check of the whole repo |
+| `npm run build` | Production build of the web app (to `dist/`) |
+| `npm run db:generate` / `db:migrate` | Create / apply a migration after editing `server/db/schema.ts` |
 
-Attachments are uploaded **once** (not once per recipient) and referenced by
-every message in a bulk send, which is also what fixes the old "payload
-error under 15 MB" bug: that was Vercel's serverless function body cap
-(4.5 MB) being hit because attachments used to travel inside every single
-send request. Now:
+## Deploying on Vercel
 
-- **Deployed on Vercel with a Blob store configured** (`BLOB_READ_WRITE_TOKEN`
-  set — create one under Storage → Blob in the Vercel dashboard): attachments
-  upload directly from the browser to Blob storage, up to the full ~18 MB
-  budget, and are deleted after you remove them or close the tab.
-- **Local dev server** (`npm start`): attachments upload to a local temp
-  directory; same ~18 MB budget.
-- **Deployed on Vercel without a Blob store**: a degraded fallback embeds
-  small attachments (~2.8 MB raw) directly in the send request. The app shows
-  a banner explaining this and how to remove the limit (configure Blob
-  storage).
+`npm run build` produces a complete [Build Output API](https://vercel.com/docs/build-output-api/v3) folder
+(`.vercel/output`): the static site plus **one** Node.js function containing the whole API, already bundled to
+plain JavaScript (no native modules), with routing and security headers (CSP, HSTS, frame denial). Vercel deploys
+it as-is; `vercel.json` only sets the build command.
 
-## Notes
+Environment variables (Project → Settings → Environment Variables):
 
-- Credentials never leave your machine other than the SMTP send itself (and,
-  if deployed, the request to your own Vercel function).
-- The HTML body is sent as `html`; the Plain-Text body, when present, is sent
-  as the `text` MIME part for clients that prefer it.
-- Outgoing HTML always opts out of mail-client dark-mode re-theming
-  (`color-scheme: light only`), so your design renders exactly as composed
-  regardless of the recipient's theme. The preview's "Forced Dark" toggle
-  simulates what an email *without* that opt-out would look like — for
-  reference only, it does not change what's sent.
-- Built with Node/Express, Nodemailer, PapaParse, and Quill on the frontend;
-  Vercel Blob (optional) for attachment storage.
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon **production** branch (`main`), pooled connection string |
+| `APP_ENCRYPTION_KEY` | 32 random bytes, base64. Use a different key from dev, and never change it once sender accounts exist |
+| `APP_BASE_URL` | The public URL, e.g. `https://mailer.example.com` (falls back to the Vercel production domain) |
+| `BLOB_READ_WRITE_TOKEN` | A **private** Vercel Blob store for attachments |
+| `BLOB_PUBLIC_READ_WRITE_TOKEN` | Optional. A second, **public** Blob store for images inside email bodies; without it, body images are embedded as inline attachments |
+
+Before the first deploy, run `npm run db:migrate` and `npm run create-admin` against the production database
+(set `DATABASE_URL` for that shell).
+
+Sending runs while the sender's browser tab is open: the page calls the API in short batches (about 30 seconds
+each, well inside the function time limit). Closing the tab pauses the job, and it can be resumed from Sent history.
+
+## Deliverability notes for KIIT IT
+
+kiit.ac.in already publishes SPF (`include:_spf.google.com`) and a Google DKIM key, so mail sent through Gmail
+SMTP is authenticated. DMARC is currently `p=none; pct=1`. After monitoring the reports, moving to
+`p=quarantine` (with `rua` reporting) would further protect the domain and improve inbox placement. Gmail limits
+each Workspace account to 2,000 recipients per day; the app enforces each account's limit.

@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* KIIT Mailer design tokens.
+   Formal institutional palette drawn from the IQAC "Heritage" theme:
+   deep navy ink, ivory surfaces, restrained gold accent. Solid surfaces only;
+   no blur / glass effects anywhere in the app. */
+:root {
+  --radius: 0.5rem;
+  --background: #f6f5f1;
+  --foreground: #14202c;
+  --card: #ffffff;
+  --card-foreground: #14202c;
+  --popover: #ffffff;
+  --popover-foreground: #14202c;
+  --primary: #0c1a28;
+  --primary-foreground: #f8f6f0;
+  --secondary: #eceae3;
+  --secondary-foreground: #14202c;
+  --muted: #efede7;
+  --muted-foreground: #5f6670;
+  --accent: #f3ecdc;
+  --accent-foreground: #5a4313;
+  --gold: #b8892f;
+  --gold-soft: #f6efdf;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --success: #2f6b2a;
+  --success-soft: #eaf3e7;
+  --warning: #9a6200;
+  --warning-soft: #fbf1dc;
+  --border: #dedad0;
+  --input: #d6d2c7;
+  --ring: #b8892f;
+  --sidebar: #0c1a28;
+  --sidebar-foreground: #d9dee4;
+  --sidebar-muted: #8695a5;
+  --sidebar-accent: #17293b;
+  --sidebar-border: #1c2f42;
+}
+
+.dark {
+  --background: #0d141c;
+  --foreground: #e6e9ed;
+  --card: #131c26;
+  --card-foreground: #e6e9ed;
+  --popover: #131c26;
+  --popover-foreground: #e6e9ed;
+  --primary: #d9b56a;
+  --primary-foreground: #0c1a28;
+  --secondary: #1b2733;
+  --secondary-foreground: #e6e9ed;
+  --muted: #1a242f;
+  --muted-foreground: #95a1ad;
+  --accent: #2a2416;
+  --accent-foreground: #e8cf96;
+  --gold: #d9b56a;
+  --gold-soft: #2a2416;
+  --destructive: #f04438;
+  --destructive-foreground: #ffffff;
+  --success: #7cc275;
+  --success-soft: #16251a;
+  --warning: #f0b445;
+  --warning-soft: #2b2312;
+  --border: #253241;
+  --input: #2c3a49;
+  --ring: #d9b56a;
+  --sidebar: #090f15;
+  --sidebar-foreground: #d9dee4;
+  --sidebar-muted: #7c8a99;
+  --sidebar-accent: #152230;
+  --sidebar-border: #17222e;
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01", "tnum";
+  }
+  h1, h2, h3 { @apply font-serif tracking-tight; }
+}

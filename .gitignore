@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 # (Ideally package-lock should be version controlled, but some prefer not to if using strict versions.
 # Standard practice is to KEEP package-lock.json. I will keep it commented out so it IS tracked.)
 
@@ -72,8 +71,6 @@ typings/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv-linter-ignore
-.env.example
 
 # Parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -127,3 +124,8 @@ data/
 sqlite.db
 local_server.exe
 IQACMailer.exe
+
+# v2
+dist/
+.vercel/
+*.tsbuildinfo

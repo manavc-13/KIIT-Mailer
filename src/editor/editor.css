@@ -1,0 +1,154 @@
+/* Email editor chrome. The theme's body CSS (themeCss) is injected per editor instance and
+   styles the content; everything here is either editor-only UI or a low-specificity
+   (:where) fallback that any theme rule overrides. Solid surfaces only. */
+
+.kb-editor .kb-canvas {
+  flex: 1;
+  overflow: auto;
+  padding: 24px 16px 32px;
+  background: #eceae3;
+  cursor: text;
+}
+.dark .kb-editor .kb-canvas { background: #0f1720; }
+
+.kb-editor .kb-paper {
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #dedad0;
+  box-shadow: 0 1px 2px rgb(12 26 40 / 0.06);
+  color: #1f2328;
+  color-scheme: light; /* the email itself is always light */
+  cursor: auto;
+}
+.kb-editor .kb-paper > div { flex: 1; display: flex; flex-direction: column; }
+.kb-editor .kb-paper .ProseMirror { flex: 1; outline: none; overflow-wrap: break-word; }
+.kb-editor .kb-paper[data-variant="body"] .ProseMirror { padding: 40px var(--kb-paper-pad, 48px); }
+.kb-editor .kb-paper[data-variant="signature"] { padding: 8px var(--kb-paper-pad, 24px) 24px; }
+@media (max-width: 640px) {
+  .kb-editor .kb-canvas { padding: 12px 8px; }
+  .kb-editor .kb-paper[data-variant="body"] .ProseMirror { padding: 24px 18px; }
+}
+
+/* ---- fallback content styles (themes override these) ---- */
+:where(.kb-editor .kb-prose) { font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #1f2328; }
+:where(.kb-editor .kb-prose) p { margin: 0 0 16px; }
+:where(.kb-editor .kb-prose) h1 { font-size: 26px; margin: 0 0 14px; line-height: 1.25; }
+:where(.kb-editor .kb-prose) h2 { font-size: 20px; margin: 26px 0 10px; line-height: 1.3; }
+:where(.kb-editor .kb-prose) h3 { font-size: 17px; margin: 22px 0 8px; line-height: 1.35; }
+:where(.kb-editor .kb-prose) ul, :where(.kb-editor .kb-prose) ol { margin: 0 0 16px; padding-left: 26px; }
+:where(.kb-editor .kb-prose) ul { list-style: disc; }
+:where(.kb-editor .kb-prose) ol { list-style: decimal; }
+:where(.kb-editor .kb-prose) ul ul { list-style: circle; }
+:where(.kb-editor .kb-prose) ul ul ul { list-style: square; }
+:where(.kb-editor .kb-prose) ol[type="a"] { list-style: lower-alpha; }
+:where(.kb-editor .kb-prose) ol[type="A"] { list-style: upper-alpha; }
+:where(.kb-editor .kb-prose) ol[type="i"] { list-style: lower-roman; }
+:where(.kb-editor .kb-prose) ol[type="I"] { list-style: upper-roman; }
+:where(.kb-editor .kb-prose) li { margin: 0 0 6px; }
+:where(.kb-editor .kb-prose) li > p { margin: 0; }
+:where(.kb-editor .kb-prose) a { color: #1d4e89; text-decoration: underline; }
+:where(.kb-editor .kb-prose) blockquote { margin: 0 0 16px; padding-left: 16px; border-left: 3px solid #b8892f; }
+:where(.kb-editor .kb-prose) hr { border: 0; border-top: 1px solid #d5d9df; margin: 20px 0; }
+:where(.kb-editor .kb-prose) strong { font-weight: 700; }
+
+/* data tables (editor view) */
+.kb-editor .kb-prose table.kb-data-table { border-collapse: collapse; width: 100%; table-layout: fixed; margin: 0 0 16px; }
+.kb-editor .kb-prose table.kb-data-table td,
+.kb-editor .kb-prose table.kb-data-table th { border: 1px solid #c9ced6; padding: 6px; vertical-align: top; position: relative; min-width: 40px; }
+.kb-editor .kb-prose table.kb-data-table th { font-weight: 600; text-align: left; }
+.kb-editor .kb-prose table.kb-data-table p { margin: 0; }
+.kb-editor .kb-prose .selectedCell::after { content: ''; position: absolute; inset: 0; background: rgb(184 137 47 / 0.18); pointer-events: none; }
+.kb-editor .kb-prose .tableWrapper { overflow-x: auto; margin: 0 0 16px; }
+
+/* custom block fallbacks (themes style these classes for real) */
+:where(.kb-editor .kb-prose) .kb-callout { width: 100%; border-collapse: collapse; margin: 0 0 22px; }
+:where(.kb-editor .kb-prose) .kb-callout-cell { padding: 14px 18px; background: #f3f6fa; border-left: 3px solid #1f3864; }
+:where(.kb-editor .kb-prose) .kb-callout[data-variant="warn"] .kb-callout-cell { background: #fbf1dc; border-left-color: #9a6200; }
+:where(.kb-editor .kb-prose) .kb-callout[data-variant="success"] .kb-callout-cell { background: #eaf3e7; border-left-color: #2f6b2a; }
+:where(.kb-editor .kb-prose) .kb-callout-cell p:last-child { margin-bottom: 0; }
+:where(.kb-editor .kb-prose) .kb-details { width: 100%; border-collapse: collapse; margin: 0 0 22px; background: #f6f5f1; }
+:where(.kb-editor .kb-prose) .kb-details-label { width: 36%; padding: 6px 12px 6px 20px; font-weight: 600; color: #5f6670; vertical-align: top; }
+:where(.kb-editor .kb-prose) .kb-details-value { padding: 6px 20px 6px 0; vertical-align: top; }
+:where(.kb-editor .kb-prose) .kb-button { margin: 0 0 22px; border-collapse: separate; }
+:where(.kb-editor .kb-prose) .kb-button-cell { background: #0c1a28; border-radius: 4px; }
+:where(.kb-editor .kb-prose) .kb-button-link { display: inline-block; padding: 12px 28px; color: #ffffff; text-decoration: none; font-weight: 600; }
+:where(.kb-editor .kb-prose) .kb-button[data-variant="secondary"] .kb-button-cell { background: #ffffff; }
+:where(.kb-editor .kb-prose) .kb-button[data-variant="secondary"] .kb-button-link { color: #0c1a28; border: 1px solid #0c1a28; }
+:where(.kb-editor .kb-prose) .kb-divider { width: 100%; border-collapse: collapse; margin: 6px 0 24px; }
+:where(.kb-editor .kb-prose) .kb-divider-cell { height: 1px; line-height: 1px; font-size: 0; padding: 0; background: #d5d9df; }
+
+/* ---- editor-only UI ---- */
+.kb-editor .kb-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left; height: 0; pointer-events: none; color: #9aa1a9;
+}
+
+/* placeholder chips */
+.kb-editor .kb-prose .kb-field,
+.kb-field-preview {
+  display: inline-block;
+  padding: 0 6px;
+  margin: 0 1px;
+  border-radius: 4px;
+  background: #f6efdf;
+  border: 1px solid #e2cf9f;
+  color: #5a4313;
+  font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+.kb-editor .kb-prose .kb-field.ProseMirror-selectednode { outline: 2px solid #b8892f; outline-offset: 1px; }
+
+/* node selection + block controls */
+.kb-editor .kb-prose .ProseMirror-selectednode:not(.kb-field),
+.kb-editor .kb-prose .kb-block-node.is-selected { outline: 2px solid #b8892f; outline-offset: 3px; border-radius: 2px; }
+.kb-editor .kb-prose .kb-block-node { position: relative; }
+.kb-editor .kb-block-controls {
+  position: absolute; top: -34px; right: 0; z-index: 5;
+  display: flex; align-items: center; gap: 2px; max-width: 100%;
+  padding: 2px; border-radius: 6px; background: #0c1a28; color: #ffffff;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif; line-height: 1;
+  box-shadow: 0 2px 6px rgb(12 26 40 / 0.25);
+  user-select: none;
+}
+.kb-editor .kb-block-controls--hover { opacity: 0; pointer-events: none; transition: opacity 120ms; }
+.kb-editor .kb-block-node:hover > .kb-block-controls--hover,
+.kb-editor .kb-block-node:focus-within > .kb-block-controls--hover,
+.kb-editor .kb-block-node.is-selected > .kb-block-controls--hover { opacity: 1; pointer-events: auto; }
+.kb-editor .kb-block-controls button:disabled { opacity: 0.4; pointer-events: none; }
+
+/* images */
+.kb-editor .kb-image-node { margin: 0 0 16px; }
+.kb-editor .kb-image-frame { position: relative; line-height: 0; }
+.kb-editor .kb-image-frame.is-selected { outline: 2px solid #b8892f; outline-offset: 2px; }
+.kb-editor .kb-image-toolbar {
+  position: absolute; left: 50%; top: 8px; transform: translateX(-50%); z-index: 5;
+  display: flex; align-items: center; gap: 1px; padding: 2px; border-radius: 6px;
+  background: #0c1a28; color: #ffffff; line-height: 1; white-space: nowrap;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif; box-shadow: 0 2px 6px rgb(12 26 40 / 0.25);
+}
+.kb-editor .kb-image-handle {
+  position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px; z-index: 5;
+  background: #ffffff; border: 2px solid #b8892f; border-radius: 3px; cursor: nwse-resize; touch-action: none;
+}
+.kb-editor .kb-image-size {
+  position: absolute; right: 10px; bottom: 8px; padding: 2px 6px; border-radius: 4px;
+  background: rgb(12 26 40 / 0.85); color: #ffffff; font: 500 11px/1.4 'IBM Plex Sans', system-ui, sans-serif;
+}
+.kb-editor .kb-image-badge {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  background: #0c1a28; color: #ffffff; font: 500 12px/1.4 'IBM Plex Sans', system-ui, sans-serif;
+}
+.kb-editor .kb-image-alt-hint {
+  position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 4px;
+  background: #fbf1dc; color: #6b4a00; border: 1px solid #e8cf96;
+  font: 500 11px/1.5 'IBM Plex Sans', system-ui, sans-serif; cursor: pointer;
+}
+
+/* gap cursor / drop cursor */
+.kb-editor .ProseMirror-gapcursor:after { border-top-color: #0c1a28; }
